@@ -28,4 +28,18 @@ public class AppointmentsController : ControllerBase
         var result = await _appointmentService.CreateAppointmentAsync(request);
         return Ok(result);
     }
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var appointments = await _appointmentService.GetTenantAppointmentsAsync();
+        return Ok(appointments);
+    }
+
+    [HttpPatch("{id:guid}/status")]
+    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateStatusRequest request)
+    {
+        var result = await _appointmentService.UpdateAppointmentStatusAsync(id, request.Status);
+        return Ok(result);
+    }
+    public record UpdateStatusRequest(SmartBooking.Domain.Enums.AppointmentStatus Status);
 }

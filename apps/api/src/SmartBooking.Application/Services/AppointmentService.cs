@@ -137,7 +137,6 @@ public class AppointmentService : IAppointmentService
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Arka planda WhatsApp bildirimini tetikle
         await _whatsAppService.SendAppointmentRequestNotificationAsync(appointment, tenant, staff, service, customer, cancellationToken);
 
         return new AppointmentResponse(
@@ -147,6 +146,64 @@ public class AppointmentService : IAppointmentService
             staff.FullName,
             customer.FullName,
             customer.PhoneNumber,
+            appointment.StartTimeUtc,
+            appointment.EndTimeUtc,
+            appointment.Price,
+            appointment.Status
+        );
+    }
+
+    public async Task<List<AppointmentResponse>> GetTenantAppointmentsAsync(CancellationToken cancellationToken = default)
+    {
+        var appointments = await _context.Appointments
+            .AsNoTracking()
+            .Include(a => a.Service)
+            .Include(a => a.Staff)
+            .Include(a => a.Customer)
+            .OrderByDescending(a => a.StartTimeUtc)
+            .ToListAsync(cancellationToken);
+
+        return appointments.Select(a => new AppointmentResponse(
+            a.Id,
+            a.TenantId,
+            a.Service.Name,
+            a.Staff.FullName,
+            a.Customer.FullName,
+            a.Customer.PhoneNumber,
+            a.StartTimeUtc,
+            a.EndTimeUtc,
+            a.Price,
+            a.Status
+        )).ToList();
+    }
+
+    public async Task<AppointmentResponse> UpdateAppointmentStatusAsync(Guid appointmentId, AppointmentStatus newStatus, CancellationToken cancellationToken = default)
+    {
+        var appointment = await _context.Appointments
+            .Include(a => a.Service)
+            .Include(a => a.Staff)
+            .Include(a => a.Customer)
+            .FirstOrDefaultAsync(a => a.Id == appointmentId, cancellationToken);
+
+        if (appointment == null)
+            throw new ArgumentException("Randevu bulunamadı.");
+
+        appointment.Status = newStatus;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        var tenant = await _context.Tenants.FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
+        if (tenant != null && (newStatus == AppointmentStatus.Confirmed || newStatus == AppointmentStatus.Rejected))
+        {
+            await _whatsAppService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
+        }
+
+        return new AppointmentResponse(
+            appointment.Id,
+            appointment.TenantId,
+            appointment.Service.Name,
+            appointment.Staff.FullName,
+            appointment.Customer.FullName,
+            appointment.Customer.PhoneNumber,
             appointment.StartTimeUtc,
             appointment.EndTimeUtc,
             appointment.Price,
