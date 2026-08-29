@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: smartbooking_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_DB: smartbooking_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: supersecretpassword123
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - smartbooking_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d smartbooking_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: smartbooking_redis_prod
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - smartbooking_net
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: smartbooking_api_prod
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=smartbooking_db;Username=postgres;Password=supersecretpassword123"
+      WhatsApp__AccessToken: "${WHATSAPP_ACCESS_TOKEN:-EAAG...}"
+      WhatsApp__DefaultPhoneNumberId: "${WHATSAPP_PHONE_NUMBER_ID:-1000...}"
+      WhatsApp__WebhookVerifyToken: "${WHATSAPP_WEBHOOK_VERIFY_TOKEN:-my_secure_verify_token_123}"
+    ports:
+      - "5099:8080"
+    networks:
+      - smartbooking_net
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:5099/api
+    container_name: smartbooking_web_prod
+    restart: always
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    networks:
+      - smartbooking_net
+
+networks:
+  smartbooking_net:
+    driver: bridge
+
+volumes:
+  postgres_prod_data:
