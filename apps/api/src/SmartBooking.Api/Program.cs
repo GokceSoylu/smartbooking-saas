@@ -10,27 +10,39 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
+// CORS Politikası
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // PostgreSQL & DbContext
 builder.Services.AddDbContext<SmartBookingDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ISmartBookingDbContext arayüz eşlemesi
 builder.Services.AddScoped<ISmartBookingDbContext>(provider =>
     provider.GetRequiredService<SmartBookingDbContext>());
 
-// HttpClient & WhatsApp Servisi
 builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
 
-// Servis Kayıtları
 builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
-// No-Show Hatırlatıcı Arka Plan İşçisi
+
+// No-Show Hatırlatıcı Arka Plan Servisi
 builder.Services.AddHostedService<SmartBooking.Infrastructure.BackgroundJobs.AppointmentReminderWorker>();
+
 var app = builder.Build();
 
 app.UseHttpsRedirection();
 
-// Tenant İzolasyon Middleware
+// CORS Middleware (Routing ve Controller öncesinde)
+app.UseCors();
+
 app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.UseAuthorization();
