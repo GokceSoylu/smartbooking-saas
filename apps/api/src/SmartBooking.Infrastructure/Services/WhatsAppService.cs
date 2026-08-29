@@ -134,4 +134,30 @@ public class WhatsAppService : IWhatsAppService
             _logger.LogError("[WhatsApp API Error] Gönderim başarısız: {Error}", err);
         }
     }
+    public async Task SendAppointmentReminderAsync(
+        Appointment appointment,
+        Customer customer,
+        Tenant tenant,
+        CancellationToken cancellationToken = default)
+    {
+        var accessToken = _configuration["WhatsApp:AccessToken"];
+        var phoneId = tenant.WhatsAppPhoneNumberId ?? _configuration["WhatsApp:DefaultPhoneNumberId"];
+
+        var messageText = $"⏰ *Randevu Hatırlatması!*\n\n" +
+                          $"Sayın *{customer.FullName}*,\n" +
+                          $"*{tenant.Name}* bünyesindeki randevunuza yaklaşık *2 saat* kaldı.\n\n" +
+                          $"📅 *Saat:* {appointment.StartTimeUtc:HH:mm} (UTC)\n\n" +
+                          $"Gelemeyecekseniz veya bir değişiklik varsa lütfen işletmeyle iletişime geçiniz.";
+
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            recipient_type = "individual",
+            to = customer.PhoneNumber,
+            type = "text",
+            text = new { preview_url = false, body = messageText }
+        };
+
+        await SendRawMessageAsync(phoneId, accessToken, payload, cancellationToken);
+    }
 }

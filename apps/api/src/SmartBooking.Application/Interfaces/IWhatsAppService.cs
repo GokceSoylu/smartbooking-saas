@@ -9,4 +9,6 @@ public interface IWhatsAppService
 
     // Müşteriye durum güncellemesi (Onaylandı / Reddedildi) atar
     Task SendCustomerStatusUpdateAsync(Appointment appointment, Customer customer, Tenant tenant, CancellationToken cancellationToken = default);
+    // Randevuya 2 saat kala müşteriye hatırlatma mesajı atar
+    Task SendAppointmentReminderAsync(Appointment appointment, Customer customer, Tenant tenant, CancellationToken cancellationToken = default);
 }

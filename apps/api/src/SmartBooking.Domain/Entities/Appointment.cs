@@ -20,6 +20,7 @@ public class Appointment : BaseEntity, ITenantEntity
     public DateTime EndTimeUtc { get; set; }
 
     public AppointmentStatus Status { get; set; } = AppointmentStatus.Pending;
+    public bool ReminderSent { get; set; } = false;
     public decimal Price { get; set; }
     public string? CancellationReason { get; set; }
 }

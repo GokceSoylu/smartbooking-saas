@@ -24,7 +24,8 @@ builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
 // Servis Kayıtları
 builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
-
+// No-Show Hatırlatıcı Arka Plan İşçisi
+builder.Services.AddHostedService<SmartBooking.Infrastructure.BackgroundJobs.AppointmentReminderWorker>();
 var app = builder.Build();
 
 app.UseHttpsRedirection();
