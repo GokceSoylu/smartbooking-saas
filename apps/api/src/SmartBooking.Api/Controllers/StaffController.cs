@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using SmartBooking.Application.DTOs;
 using SmartBooking.Application.Interfaces;
 using SmartBooking.Domain.Entities;
 
@@ -23,7 +22,7 @@ public class StaffController : ControllerBase
         var staff = await _context.StaffMembers
             .AsNoTracking()
             .Where(s => s.IsActive)
-            .Select(s => new StaffResponse(s.Id, s.FullName, s.Title, s.PhoneNumber, s.IsActive))
+            .OrderBy(s => s.FullName)
             .ToListAsync();
 
         return Ok(staff);
@@ -36,12 +35,28 @@ public class StaffController : ControllerBase
         {
             FullName = request.FullName,
             Title = request.Title,
-            PhoneNumber = request.PhoneNumber
+            PhoneNumber = request.PhoneNumber,
+            IsActive = true
         };
 
         _context.StaffMembers.Add(staff);
         await _context.SaveChangesAsync();
 
-        return Ok(new StaffResponse(staff.Id, staff.FullName, staff.Title, staff.PhoneNumber, staff.IsActive));
+        return Ok(staff);
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var staff = await _context.StaffMembers.FirstOrDefaultAsync(s => s.Id == id);
+        if (staff == null)
+            return NotFound();
+
+        staff.IsActive = false; // Soft delete
+        await _context.SaveChangesAsync();
+
+        return NoContent();
     }
 }
+
+public record CreateStaffRequest(string FullName, string Title, string PhoneNumber);

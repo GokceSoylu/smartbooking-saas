@@ -42,14 +42,18 @@ export interface CreateAppointmentPayload {
 
 export interface AppointmentResult {
     id: string;
+    tenantId: string;
     serviceName: string;
     staffName: string;
     customerFullName: string;
+    customerPhoneNumber: string;
     startTimeUtc: string;
+    endTimeUtc: string;
     price: number;
     status: number;
 }
 
+// 1. Tenant, Servis ve Personel Listeleme
 export async function fetchTenantBySlug(slug: string): Promise<Tenant> {
     const res = await fetch(`${API_BASE_URL}/tenants/by-slug/${slug}`, { cache: "no-store" });
     if (!res.ok) throw new Error("İşletme bulunamadı");
@@ -74,6 +78,7 @@ export async function fetchStaff(tenantId: string): Promise<StaffItem[]> {
     return res.json();
 }
 
+// 2. Slot Sorgulama ve Randevu Oluşturma
 export async function fetchAvailableSlots(
     tenantId: string,
     serviceId: string,
@@ -110,6 +115,8 @@ export async function createAppointment(
     }
     return res.json();
 }
+
+// 3. Dashboard Randevu Listeleme ve Durum Güncelleme
 export async function fetchTenantAppointments(tenantId: string): Promise<AppointmentResult[]> {
     const res = await fetch(`${API_BASE_URL}/appointments`, {
         headers: { "X-Tenant-Id": tenantId },
@@ -134,4 +141,54 @@ export async function updateAppointmentStatus(
     });
     if (!res.ok) throw new Error("Durum güncellenemedi");
     return res.json();
+}
+
+// 4. Hizmet Ekleme / Silme
+export async function createService(
+    tenantId: string,
+    payload: { name: string; description: string; durationInMinutes: number; price: number }
+): Promise<ServiceItem> {
+    const res = await fetch(`${API_BASE_URL}/services`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Tenant-Id": tenantId,
+        },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Hizmet eklenemedi");
+    return res.json();
+}
+
+export async function deleteService(tenantId: string, serviceId: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/services/${serviceId}`, {
+        method: "DELETE",
+        headers: { "X-Tenant-Id": tenantId },
+    });
+    if (!res.ok) throw new Error("Hizmet silinemedi");
+}
+
+// 5. Personel Ekleme / Silme
+export async function createStaff(
+    tenantId: string,
+    payload: { fullName: string; title: string; phoneNumber: string }
+): Promise<StaffItem> {
+    const res = await fetch(`${API_BASE_URL}/staff`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Tenant-Id": tenantId,
+        },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Personel eklenemedi");
+    return res.json();
+}
+
+export async function deleteStaff(tenantId: string, staffId: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/staff/${staffId}`, {
+        method: "DELETE",
+        headers: { "X-Tenant-Id": tenantId },
+    });
+    if (!res.ok) throw new Error("Personel silinemedi");
 }
