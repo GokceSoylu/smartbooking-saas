@@ -1,4 +1,3 @@
-using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using SmartBooking.Application.Interfaces;
 using SmartBooking.Domain.Common;
@@ -22,6 +21,7 @@ public class SmartBookingDbContext : DbContext, ISmartBookingDbContext
     public DbSet<Service> Services => Set<Service>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Appointment> Appointments => Set<Appointment>();
+    public DbSet<WorkingHour> WorkingHours => Set<WorkingHour>();
 
     public Guid? CurrentTenantId => _currentTenantService.TenantId;
 
@@ -34,6 +34,7 @@ public class SmartBookingDbContext : DbContext, ISmartBookingDbContext
         modelBuilder.Entity<Service>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<Customer>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<Appointment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<WorkingHour>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
 
         modelBuilder.Entity<Tenant>()
             .HasIndex(t => t.Slug)

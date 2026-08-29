@@ -28,6 +28,26 @@ public class AppointmentService : IAppointmentService
 
         var targetDate = DateTime.SpecifyKind(request.Date.Date, DateTimeKind.Utc);
         var nextDay = targetDate.AddDays(1);
+        var dayOfWeek = targetDate.DayOfWeek;
+
+        // O güne ait çalışma saatini tenant üzerinden bul
+        var workingHour = await _context.WorkingHours
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w => w.DayOfWeek == dayOfWeek, cancellationToken);
+
+        // İşletme o gün tatil/kapalı olarak işaretlendiyse doğrudan boş liste dön
+        if (workingHour != null && workingHour.IsClosed)
+        {
+            return new List<TimeSlotDto>();
+        }
+
+        // Kayıt tanımlanmamışsa varsayılan 09:00 - 19:00 saat aralığını baz al
+        var openTime = workingHour?.OpeningTime ?? new TimeSpan(9, 0, 0);
+        var closeTime = workingHour?.ClosingTime ?? new TimeSpan(19, 0, 0);
+
+        var workStart = targetDate.Date + openTime;
+        var workEnd = targetDate.Date + closeTime;
+        var slotDuration = TimeSpan.FromMinutes(service.DurationInMinutes);
 
         var existingAppointments = await _context.Appointments
             .AsNoTracking()
@@ -39,12 +59,8 @@ public class AppointmentService : IAppointmentService
             .ToListAsync(cancellationToken);
 
         var availableSlots = new List<TimeSlotDto>();
-
-        var workStart = targetDate.AddHours(9);
-        var workEnd = targetDate.AddHours(18);
-        var slotDuration = TimeSpan.FromMinutes(service.DurationInMinutes);
-
         var currentSlotStart = workStart;
+
         while (currentSlotStart + slotDuration <= workEnd)
         {
             var currentSlotEnd = currentSlotStart + slotDuration;
@@ -91,6 +107,15 @@ public class AppointmentService : IAppointmentService
 
         var startTimeUtc = DateTime.SpecifyKind(request.StartTimeUtc, DateTimeKind.Utc);
         var endTimeUtc = startTimeUtc.AddMinutes(service.DurationInMinutes);
+        var dayOfWeek = startTimeUtc.DayOfWeek;
+
+        // Tatil günü randevu alımını engelle
+        var workingHour = await _context.WorkingHours
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w => w.DayOfWeek == dayOfWeek, cancellationToken);
+
+        if (workingHour != null && workingHour.IsClosed)
+            throw new InvalidOperationException("İşletme seçilen tarihte hizmet vermemektedir.");
 
         bool isBusy = await _context.Appointments
             .AsNoTracking()

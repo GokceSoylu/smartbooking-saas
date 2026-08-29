@@ -10,6 +10,7 @@ public interface ISmartBookingDbContext
     DbSet<Service> Services { get; }
     DbSet<Customer> Customers { get; }
     DbSet<Appointment> Appointments { get; }
+    DbSet<WorkingHour> WorkingHours { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

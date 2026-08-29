@@ -10,9 +10,12 @@ import {
     deleteService,
     createStaff,
     deleteStaff,
+    fetchWorkingHours,
+    updateWorkingHours,
     AppointmentResult,
     ServiceItem,
     StaffItem,
+    WorkingHourItem,
 } from "@/lib/api";
 import {
     Calendar,
@@ -33,7 +36,7 @@ import {
 const DEMO_TENANT_ID = "00926e45-6412-49a6-acc4-05632aa9a9df";
 
 export default function AdminDashboardPage() {
-    const [activeTab, setActiveTab] = useState<"appointments" | "services" | "staff">("appointments");
+    const [activeTab, setActiveTab] = useState<"appointments" | "services" | "staff" | "hours">("appointments");
     const [loading, setLoading] = useState(true);
 
     // Randevular
@@ -44,6 +47,11 @@ export default function AdminDashboardPage() {
     // Hizmetler & Personel
     const [services, setServices] = useState<ServiceItem[]>([]);
     const [staffList, setStaffList] = useState<StaffItem[]>([]);
+
+    // Çalışma Saatleri & Tatiller
+    const [workingHours, setWorkingHours] = useState<WorkingHourItem[]>([]);
+    const [savingHours, setSavingHours] = useState(false);
+    const dayNames = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
 
     // Yeni Hizmet Form State
     const [newServiceName, setNewServiceName] = useState("");
@@ -59,14 +67,16 @@ export default function AdminDashboardPage() {
     async function loadData() {
         try {
             setLoading(true);
-            const [appData, srvData, staffData] = await Promise.all([
+            const [appData, srvData, staffData, hoursData] = await Promise.all([
                 fetchTenantAppointments(DEMO_TENANT_ID),
                 fetchServices(DEMO_TENANT_ID),
                 fetchStaff(DEMO_TENANT_ID),
+                fetchWorkingHours(DEMO_TENANT_ID),
             ]);
             setAppointments(appData);
             setServices(srvData);
             setStaffList(staffData);
+            setWorkingHours(hoursData);
         } catch (err) {
             console.error(err);
         } finally {
@@ -144,6 +154,24 @@ export default function AdminDashboardPage() {
         }
     }
 
+    async function handleSaveWorkingHours() {
+        try {
+            setSavingHours(true);
+            await updateWorkingHours(DEMO_TENANT_ID, workingHours);
+            alert("Çalışma saatleri başarıyla güncellendi!");
+        } catch {
+            alert("Çalışma saatleri kaydedilemedi.");
+        } finally {
+            setSavingHours(false);
+        }
+    }
+
+    function handleHourChange(dayOfWeek: number, field: keyof WorkingHourItem, value: any) {
+        setWorkingHours((prev) =>
+            prev.map((item) => (item.dayOfWeek === dayOfWeek ? { ...item, [field]: value } : item))
+        );
+    }
+
     const totalIncome = appointments
         .filter((a) => a.status === 2)
         .reduce((sum, a) => sum + a.price, 0);
@@ -208,33 +236,34 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Sekmeler (Tabs) */}
-                <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+                <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
                     <button
                         onClick={() => setActiveTab("appointments")}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all ${activeTab === "appointments"
-                                ? "bg-slate-900 text-white shadow-sm"
-                                : "bg-white text-slate-600 hover:bg-slate-100"
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all whitespace-nowrap ${activeTab === "appointments" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-100"
                             }`}
                     >
                         <Calendar className="w-4 h-4" /> Randevular
                     </button>
                     <button
                         onClick={() => setActiveTab("services")}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all ${activeTab === "services"
-                                ? "bg-slate-900 text-white shadow-sm"
-                                : "bg-white text-slate-600 hover:bg-slate-100"
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all whitespace-nowrap ${activeTab === "services" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-100"
                             }`}
                     >
                         <Scissors className="w-4 h-4" /> Hizmetler ({services.length})
                     </button>
                     <button
                         onClick={() => setActiveTab("staff")}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all ${activeTab === "staff"
-                                ? "bg-slate-900 text-white shadow-sm"
-                                : "bg-white text-slate-600 hover:bg-slate-100"
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all whitespace-nowrap ${activeTab === "staff" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-100"
                             }`}
                     >
                         <Users className="w-4 h-4" /> Ekip ({staffList.length})
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("hours")}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all whitespace-nowrap ${activeTab === "hours" ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-100"
+                            }`}
+                    >
+                        <Clock className="w-4 h-4" /> Çalışma Saatleri & Tatiller
                     </button>
                 </div>
 
@@ -377,7 +406,6 @@ export default function AdminDashboardPage() {
                 {/* TAB 2: HİZMET YÖNETİMİ */}
                 {activeTab === "services" && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Form */}
                         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm h-fit">
                             <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                                 <Plus className="w-5 h-5 text-emerald-500" /> Yeni Hizmet Ekle
@@ -436,7 +464,6 @@ export default function AdminDashboardPage() {
                             </form>
                         </div>
 
-                        {/* Liste */}
                         <div className="md:col-span-2 space-y-3">
                             {services.map((s) => (
                                 <div
@@ -468,7 +495,6 @@ export default function AdminDashboardPage() {
                 {/* TAB 3: EKİP YÖNETİMİ */}
                 {activeTab === "staff" && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Form */}
                         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm h-fit">
                             <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                                 <Plus className="w-5 h-5 text-emerald-500" /> Yeni Personel Ekle
@@ -516,7 +542,6 @@ export default function AdminDashboardPage() {
                             </form>
                         </div>
 
-                        {/* Liste */}
                         <div className="md:col-span-2 space-y-3">
                             {staffList.map((st) => (
                                 <div
@@ -539,6 +564,83 @@ export default function AdminDashboardPage() {
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* TAB 4: ÇALIŞMA SAATLERİ & TATİLLER */}
+                {activeTab === "hours" && (
+                    <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-sm space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900">Haftalık Çalışma & Tatil Planı</h2>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    Kapalı işaretlediğiniz günlerde müşteriler sistem üzerinden randevu slotu seçemez.
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleSaveWorkingHours}
+                                disabled={savingHours}
+                                className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-2xl transition-all shadow-md shadow-emerald-500/20 disabled:opacity-50"
+                            >
+                                {savingHours ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
+                            </button>
+                        </div>
+
+                        <div className="divide-y divide-slate-100">
+                            {workingHours.map((wh) => (
+                                <div
+                                    key={wh.dayOfWeek}
+                                    className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                                >
+                                    <div className="w-36">
+                                        <span className="font-semibold text-slate-800 text-sm">
+                                            {dayNames[wh.dayOfWeek]}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-4 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-xs text-slate-400 font-medium">Açılış:</label>
+                                            <input
+                                                type="time"
+                                                disabled={wh.isClosed}
+                                                value={wh.openingTime.slice(0, 5)}
+                                                onChange={(e) => handleHourChange(wh.dayOfWeek, "openingTime", e.target.value)}
+                                                className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium disabled:opacity-40"
+                                            />
+                                        </div>
+
+                                        <span className="text-slate-300">-</span>
+
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-xs text-slate-400 font-medium">Kapanış:</label>
+                                            <input
+                                                type="time"
+                                                disabled={wh.isClosed}
+                                                value={wh.closingTime.slice(0, 5)}
+                                                onChange={(e) => handleHourChange(wh.dayOfWeek, "closingTime", e.target.value)}
+                                                className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium disabled:opacity-40"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={wh.isClosed}
+                                                onChange={(e) => handleHourChange(wh.dayOfWeek, "isClosed", e.target.checked)}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+                                            <span className={`ml-2 text-xs font-semibold ${wh.isClosed ? "text-rose-600" : "text-slate-500"}`}>
+                                                {wh.isClosed ? "Kapalı / Tatil" : "Açık"}
+                                            </span>
+                                        </label>
+                                    </div>
                                 </div>
                             ))}
                         </div>

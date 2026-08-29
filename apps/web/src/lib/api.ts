@@ -192,3 +192,34 @@ export async function deleteStaff(tenantId: string, staffId: string): Promise<vo
     });
     if (!res.ok) throw new Error("Personel silinemedi");
 }
+export interface WorkingHourItem {
+    id?: string;
+    dayOfWeek: number; // 0: Pazar, 1: Pazartesi, ...
+    openingTime: string;
+    closingTime: string;
+    isClosed: boolean;
+}
+
+export async function fetchWorkingHours(tenantId: string): Promise<WorkingHourItem[]> {
+    const res = await fetch(`${API_BASE_URL}/workinghours`, {
+        headers: { "X-Tenant-Id": tenantId },
+        cache: "no-store",
+    });
+    if (!res.ok) throw new Error("Çalışma saatleri alınamadı");
+    return res.json();
+}
+
+export async function updateWorkingHours(
+    tenantId: string,
+    items: WorkingHourItem[]
+): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/workinghours`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Tenant-Id": tenantId,
+        },
+        body: JSON.stringify(items),
+    });
+    if (!res.ok) throw new Error("Çalışma saatleri güncellenemedi");
+}
