@@ -25,18 +25,7 @@ public class AppointmentsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateAppointmentRequest request)
     {
-        try
-        {
-            var result = await _appointmentService.CreateAppointmentAsync(request);
-            return Ok(result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new { message = ex.Message });
-        }
+        var result = await _appointmentService.CreateAppointmentAsync(request);
+        return Ok(result);
     }
 }

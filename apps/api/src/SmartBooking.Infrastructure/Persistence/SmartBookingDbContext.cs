@@ -29,19 +29,11 @@ public class SmartBookingDbContext : DbContext, ISmartBookingDbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-        {
-            if (typeof(ITenantEntity).IsAssignableFrom(entityType.ClrType))
-            {
-                var parameter = Expression.Parameter(entityType.ClrType, "e");
-                var property = Expression.Property(parameter, nameof(ITenantEntity.TenantId));
-                var tenantIdProperty = Expression.Property(Expression.Constant(this), nameof(CurrentTenantId));
-                var compare = Expression.Equal(property, Expression.Convert(tenantIdProperty, typeof(Guid)));
-                var lambda = Expression.Lambda(compare, parameter);
-
-                modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
-            }
-        }
+        // Multi-tenant Global Query Filters
+        modelBuilder.Entity<Staff>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<Service>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<Customer>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<Appointment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
 
         modelBuilder.Entity<Tenant>()
             .HasIndex(t => t.Slug)

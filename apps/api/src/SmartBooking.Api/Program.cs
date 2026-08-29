@@ -3,6 +3,7 @@ using SmartBooking.Api.Middlewares;
 using SmartBooking.Application.Interfaces;
 using SmartBooking.Application.Services;
 using SmartBooking.Infrastructure.Persistence;
+using SmartBooking.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,9 @@ builder.Services.AddDbContext<SmartBookingDbContext>(options =>
 builder.Services.AddScoped<ISmartBookingDbContext>(provider =>
     provider.GetRequiredService<SmartBookingDbContext>());
 
+// HttpClient & WhatsApp Servisi
+builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
+
 // Servis Kayıtları
 builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
@@ -25,7 +29,7 @@ var app = builder.Build();
 
 app.UseHttpsRedirection();
 
-// Tenant Middleware
+// Tenant İzolasyon Middleware
 app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.UseAuthorization();
