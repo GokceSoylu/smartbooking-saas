@@ -1,0 +1,77 @@
+using System.Linq.Expressions;
+using Microsoft.EntityFrameworkCore;
+using SmartBooking.Application.Interfaces;
+using SmartBooking.Domain.Common;
+using SmartBooking.Domain.Entities;
+
+namespace SmartBooking.Infrastructure.Persistence;
+
+public class SmartBookingDbContext : DbContext, ISmartBookingDbContext
+{
+    private readonly ICurrentTenantService _currentTenantService;
+
+    public SmartBookingDbContext(
+        DbContextOptions<SmartBookingDbContext> options,
+        ICurrentTenantService currentTenantService) : base(options)
+    {
+        _currentTenantService = currentTenantService;
+    }
+
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<Staff> StaffMembers => Set<Staff>();
+    public DbSet<Service> Services => Set<Service>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Appointment> Appointments => Set<Appointment>();
+
+    public Guid? CurrentTenantId => _currentTenantService.TenantId;
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (typeof(ITenantEntity).IsAssignableFrom(entityType.ClrType))
+            {
+                var parameter = Expression.Parameter(entityType.ClrType, "e");
+                var property = Expression.Property(parameter, nameof(ITenantEntity.TenantId));
+                var tenantIdProperty = Expression.Property(Expression.Constant(this), nameof(CurrentTenantId));
+                var compare = Expression.Equal(property, Expression.Convert(tenantIdProperty, typeof(Guid)));
+                var lambda = Expression.Lambda(compare, parameter);
+
+                modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
+            }
+        }
+
+        modelBuilder.Entity<Tenant>()
+            .HasIndex(t => t.Slug)
+            .IsUnique();
+
+        modelBuilder.Entity<Customer>()
+            .HasIndex(c => new { c.TenantId, c.PhoneNumber });
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        if (_currentTenantService.TenantId.HasValue)
+        {
+            foreach (var entry in ChangeTracker.Entries<ITenantEntity>())
+            {
+                if (entry.State == EntityState.Added && entry.Entity.TenantId == Guid.Empty)
+                {
+                    entry.Entity.TenantId = _currentTenantService.TenantId.Value;
+                }
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<BaseEntity>())
+        {
+            if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAtUtc = DateTime.UtcNow;
+            }
+        }
+
+        return base.SaveChangesAsync(cancellationToken);
+    }
+}

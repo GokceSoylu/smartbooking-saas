@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SmartBooking.Api/SmartBooking.Api.csproj" />
+    <Project Path="src/SmartBooking.Application/SmartBooking.Application.csproj" />
+    <Project Path="src/SmartBooking.Domain/SmartBooking.Domain.csproj" />
+    <Project Path="src/SmartBooking.Infrastructure/SmartBooking.Infrastructure.csproj" />
+  </Folder>
+</Solution>
