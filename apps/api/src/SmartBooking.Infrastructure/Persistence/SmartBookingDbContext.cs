@@ -22,7 +22,7 @@ public class SmartBookingDbContext : DbContext, ISmartBookingDbContext
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Appointment> Appointments => Set<Appointment>();
     public DbSet<WorkingHour> WorkingHours => Set<WorkingHour>();
-
+    public DbSet<User> Users => Set<User>();
     public Guid? CurrentTenantId => _currentTenantService.TenantId;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -35,7 +35,8 @@ public class SmartBookingDbContext : DbContext, ISmartBookingDbContext
         modelBuilder.Entity<Customer>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<Appointment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<WorkingHour>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
-
+        modelBuilder.Entity<User>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
         modelBuilder.Entity<Tenant>()
             .HasIndex(t => t.Slug)
             .IsUnique();

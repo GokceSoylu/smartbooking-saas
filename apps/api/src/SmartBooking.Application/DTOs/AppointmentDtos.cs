@@ -20,7 +20,8 @@ public record CreateAppointmentRequest(
     DateTime StartTimeUtc,
     string CustomerFullName,
     string CustomerPhoneNumber,
-    string? CustomerNotes
+    string? CustomerNotes,
+    bool CustomerWantsWhatsAppNotification = true
 );
 
 public record AppointmentResponse(

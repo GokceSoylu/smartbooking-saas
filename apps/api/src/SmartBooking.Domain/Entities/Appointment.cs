@@ -6,7 +6,7 @@ namespace SmartBooking.Domain.Entities;
 public class Appointment : BaseEntity, ITenantEntity
 {
     public Guid TenantId { get; set; }
-
+    public bool CustomerWantsWhatsAppNotification { get; set; } = true;
     public Guid CustomerId { get; set; }
     public Customer Customer { get; set; } = null!;
 

@@ -9,12 +9,14 @@ namespace SmartBooking.Application.Services;
 public class AppointmentService : IAppointmentService
 {
     private readonly ISmartBookingDbContext _context;
-    private readonly IWhatsAppService _whatsAppService;
+    private readonly INotificationService _notificationService;
 
-    public AppointmentService(ISmartBookingDbContext context, IWhatsAppService whatsAppService)
+    public AppointmentService(
+        ISmartBookingDbContext context,
+        INotificationService notificationService)
     {
         _context = context;
-        _whatsAppService = whatsAppService;
+        _notificationService = notificationService;
     }
 
     public async Task<List<TimeSlotDto>> GetAvailableSlotsAsync(GetAvailableSlotsRequest request, CancellationToken cancellationToken = default)
@@ -156,13 +158,21 @@ public class AppointmentService : IAppointmentService
             StartTimeUtc = startTimeUtc,
             EndTimeUtc = endTimeUtc,
             Price = service.Price,
-            Status = AppointmentStatus.Pending
+            Status = AppointmentStatus.Pending,
+            CustomerWantsWhatsAppNotification = request.CustomerWantsWhatsAppNotification
         };
 
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
-        await _whatsAppService.SendAppointmentRequestNotificationAsync(appointment, tenant, staff, service, customer, cancellationToken);
+        // Hem müşteriye hem işletme sahibine WhatsApp fırlat
+        await _notificationService.SendAppointmentRequestNotificationAsync(
+            appointment,
+            tenant,
+            staff,
+            service,
+            customer,
+            cancellationToken);
 
         return new AppointmentResponse(
             appointment.Id,
@@ -219,7 +229,7 @@ public class AppointmentService : IAppointmentService
         var tenant = await _context.Tenants.FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
         if (tenant != null && (newStatus == AppointmentStatus.Confirmed || newStatus == AppointmentStatus.Rejected))
         {
-            await _whatsAppService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
+            await _notificationService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
         }
 
         return new AppointmentResponse(

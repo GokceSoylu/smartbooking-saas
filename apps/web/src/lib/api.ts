@@ -223,3 +223,70 @@ export async function updateWorkingHours(
     });
     if (!res.ok) throw new Error("Çalışma saatleri güncellenemedi");
 }
+export interface LoginResponse {
+    token: string;
+    fullName: string;
+    email: string;
+    tenantId: string;
+}
+
+export async function login(payload: { email: string; password: string }): Promise<LoginResponse> {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Giriş başarısız" }));
+        throw new Error(err.message || "Giriş yapılamadı");
+    }
+    return res.json();
+}
+export async function registerTenant(payload: {
+    businessName: string;
+    slug: string;
+    fullName: string;
+    email: string;
+    password: string;
+    phoneNumber: string;
+}): Promise<LoginResponse> {
+    const res = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Kayıt oluşturulamadı" }));
+        throw new Error(err.message || "Kayıt işlemi başarısız");
+    }
+    return res.json();
+}
+export interface CreateAppointmentPayload {
+    serviceId: string;
+    staffId: string;
+    startTimeUtc: string;
+    customerFullName: string;
+    customerPhoneNumber: string;
+    customerNotes?: string;
+    customerWantsWhatsAppNotification?: boolean; // <--- EKLENDİ
+}
+export async function fetchAllTenants(): Promise<Tenant[]> {
+    const res = await fetch(`${API_BASE_URL}/tenants/all`, { cache: "no-store" });
+    if (!res.ok) throw new Error("İşletmeler alınamadı");
+    return res.json();
+}
+
+export async function updateTenantNotificationSettings(
+    tenantId: string,
+    notifyOwner: boolean
+): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/tenants/notification-settings`, {
+        method: "PATCH",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Tenant-Id": tenantId,
+        },
+        body: JSON.stringify({ notifyOwnerOnNewAppointment: notifyOwner }),
+    });
+    if (!res.ok) throw new Error("Ayar güncellenemedi");
+}

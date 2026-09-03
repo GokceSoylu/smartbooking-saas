@@ -10,113 +10,178 @@ namespace SmartBooking.Api.Controllers;
 [Route("api/webhook/whatsapp")]
 public class WhatsAppWebhookController : ControllerBase
 {
-    private readonly ISmartBookingDbContext _context;
-    private readonly IWhatsAppService _whatsAppService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<WhatsAppWebhookController> _logger;
+    private readonly ISmartBookingDbContext _context;
+    private readonly INotificationService _notificationService;
 
     public WhatsAppWebhookController(
-        ISmartBookingDbContext context,
-        IWhatsAppService whatsAppService,
         IConfiguration configuration,
-        ILogger<WhatsAppWebhookController> logger)
+        ILogger<WhatsAppWebhookController> logger,
+        ISmartBookingDbContext context,
+        INotificationService notificationService)
     {
-        _context = context;
-        _whatsAppService = whatsAppService;
         _configuration = configuration;
         _logger = logger;
+        _context = context;
+        _notificationService = notificationService;
     }
 
+    // 1. Meta Webhook URL Doğrulama (GET)
     [HttpGet]
     public IActionResult VerifyWebhook(
         [FromQuery(Name = "hub.mode")] string? mode,
         [FromQuery(Name = "hub.verify_token")] string? token,
         [FromQuery(Name = "hub.challenge")] string? challenge)
     {
-        var verifyToken = _configuration["WhatsApp:VerifyToken"] ?? "smartbooking_secure_verify_token";
+        var expectedToken = _configuration["WhatsApp:VerifyToken"];
 
-        if (mode == "subscribe" && token == verifyToken)
+        if (mode == "subscribe" && token == expectedToken)
         {
-            _logger.LogInformation("WhatsApp webhook başarıyla doğrulandı.");
+            _logger.LogInformation("Meta Webhook doğrulaması başarılı.");
             return Ok(challenge);
         }
 
+        _logger.LogWarning("Geçersiz Webhook doğrulama isteği. Token uyuşmadı.");
         return Forbid();
     }
 
+    // 2. Meta Olaylarını Dinleme (POST) - Buton Tıklamaları ve Yanıtlar
     [HttpPost]
-    public async Task<IActionResult> ReceiveWebhook([FromBody] JsonElement rawPayload)
+    public async Task<IActionResult> ReceiveWebhook([FromBody] JsonElement payload, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Webhook Payload: {Json}", rawPayload.ToString());
-
         try
         {
-            if (!rawPayload.TryGetProperty("entry", out var entryProp) || entryProp.GetArrayLength() == 0)
-                return Ok(new { status = "ignored_no_entry" });
+            if (!payload.TryGetProperty("entry", out var entries))
+                return Ok();
 
-            var firstEntry = entryProp[0];
-            if (!firstEntry.TryGetProperty("changes", out var changesProp) || changesProp.GetArrayLength() == 0)
-                return Ok(new { status = "ignored_no_changes" });
-
-            var valueProp = changesProp[0].GetProperty("value");
-            if (!valueProp.TryGetProperty("messages", out var messagesProp) || messagesProp.GetArrayLength() == 0)
-                return Ok(new { status = "ignored_no_messages" });
-
-            var message = messagesProp[0];
-            if (!message.TryGetProperty("interactive", out var interactiveProp))
-                return Ok(new { status = "ignored_not_interactive" });
-
-            if (!interactiveProp.TryGetProperty("button_reply", out var buttonReplyProp))
-                return Ok(new { status = "ignored_no_button_reply" });
-
-            var buttonId = buttonReplyProp.GetProperty("id").GetString();
-            _logger.LogInformation("Tıklanan Buton ID: {ButtonId}", buttonId);
-
-            if (string.IsNullOrWhiteSpace(buttonId))
-                return Ok(new { status = "empty_button_id" });
-
-            var isConfirm = buttonId.StartsWith("CONFIRM_");
-            var isReject = buttonId.StartsWith("REJECT_");
-
-            if (!isConfirm && !isReject)
-                return Ok(new { status = "unrecognized_button" });
-
-            var appointmentIdString = isConfirm
-                ? buttonId.Replace("CONFIRM_", "")
-                : buttonId.Replace("REJECT_", "");
-
-            if (!Guid.TryParse(appointmentIdString, out var appointmentId))
-                return BadRequest(new { message = "Geçersiz randevu kimliği." });
-
-            var appointment = await _context.Appointments
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(a => a.Id == appointmentId);
-
-            if (appointment == null)
-                return NotFound(new { message = "Randevu bulunamadı." });
-
-            appointment.Status = isConfirm ? AppointmentStatus.Confirmed : AppointmentStatus.Rejected;
-            await _context.SaveChangesAsync();
-
-            var customer = await _context.Customers.IgnoreQueryFilters().FirstOrDefaultAsync(c => c.Id == appointment.CustomerId);
-            var tenant = await _context.Tenants.FirstOrDefaultAsync(t => t.Id == appointment.TenantId);
-
-            if (customer != null && tenant != null)
+            foreach (var entry in entries.EnumerateArray())
             {
-                await _whatsAppService.SendCustomerStatusUpdateAsync(appointment, customer, tenant);
+                if (!entry.TryGetProperty("changes", out var changes)) continue;
+
+                foreach (var change in changes.EnumerateArray())
+                {
+                    if (!change.TryGetProperty("value", out var value)) continue;
+
+                    if (!value.TryGetProperty("messages", out var messages)) continue;
+
+                    foreach (var message in messages.EnumerateArray())
+                    {
+                        var senderPhone = message.GetProperty("from").GetString();
+                        var messageType = message.GetProperty("type").GetString();
+
+                        // Buton tıklaması yanıtı (Onayla / Reddet)
+                        if (messageType == "interactive")
+                        {
+                            var interactive = message.GetProperty("interactive");
+                            var interactiveType = interactive.GetProperty("type").GetString();
+
+                            if (interactiveType == "button_reply")
+                            {
+                                var buttonId = interactive.GetProperty("button_reply").GetProperty("id").GetString();
+                                await HandleButtonReplyAsync(senderPhone, buttonId, cancellationToken);
+                            }
+                        }
+                        // Düz metin yanıtı ("Evet" veya "İptal")
+                        else if (messageType == "text")
+                        {
+                            var textBody = message.GetProperty("text").GetProperty("body").GetString();
+                            await HandleTextReplyAsync(senderPhone, textBody, cancellationToken);
+                        }
+                    }
+                }
             }
 
-            return Ok(new
-            {
-                success = true,
-                appointmentId = appointment.Id,
-                status = appointment.Status.ToString()
-            });
+            return Ok();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Webhook işleme hatası");
-            return StatusCode(500, new { error = ex.Message });
+            _logger.LogError(ex, "Webhook işlenirken hata oluştu.");
+            return Ok();
+        }
+    }
+
+    private async Task HandleButtonReplyAsync(string? phone, string? buttonId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(phone) || string.IsNullOrWhiteSpace(buttonId)) return;
+
+        _logger.LogInformation("WhatsApp Buton Yanıtı: {Phone} - Buton ID: {ButtonId}", phone, buttonId);
+
+        if (buttonId.StartsWith("CONFIRM_"))
+        {
+            var idString = buttonId.Replace("CONFIRM_", "");
+            if (Guid.TryParse(idString, out var appointmentId))
+            {
+                await UpdateStatusAndNotifyCustomerAsync(appointmentId, AppointmentStatus.Confirmed, cancellationToken);
+            }
+        }
+        else if (buttonId.StartsWith("REJECT_"))
+        {
+            var idString = buttonId.Replace("REJECT_", "");
+            if (Guid.TryParse(idString, out var appointmentId))
+            {
+                await UpdateStatusAndNotifyCustomerAsync(appointmentId, AppointmentStatus.Rejected, cancellationToken);
+            }
+        }
+        else if (buttonId.StartsWith("CANCEL_"))
+        {
+            var idString = buttonId.Replace("CANCEL_", "");
+            if (Guid.TryParse(idString, out var appointmentId))
+            {
+                await UpdateStatusAndNotifyCustomerAsync(appointmentId, AppointmentStatus.Cancelled, cancellationToken);
+            }
+        }
+    }
+
+    private async Task HandleTextReplyAsync(string? phone, string? text, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(phone) || string.IsNullOrWhiteSpace(text)) return;
+
+        var cleanText = text.Trim().ToLowerInvariant();
+        _logger.LogInformation("WhatsApp Mesaj Yanıtı: {Phone} - Metin: {Text}", phone, cleanText);
+
+        var cleanPhone = phone.StartsWith("90") ? phone[2..] : phone;
+        var appointment = await _context.Appointments
+            .Include(a => a.Customer)
+            .Include(a => a.Tenant)
+            .Where(a => a.Customer.PhoneNumber.EndsWith(cleanPhone) && a.Status == AppointmentStatus.Pending)
+            .OrderByDescending(a => a.StartTimeUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (appointment == null) return;
+
+        if (cleanText == "evet" || cleanText == "onay")
+        {
+            await UpdateStatusAndNotifyCustomerAsync(appointment.Id, AppointmentStatus.Confirmed, cancellationToken);
+        }
+        else if (cleanText == "iptal" || cleanText == "hayır" || cleanText == "red")
+        {
+            await UpdateStatusAndNotifyCustomerAsync(appointment.Id, AppointmentStatus.Rejected, cancellationToken);
+        }
+    }
+
+    private async Task UpdateStatusAndNotifyCustomerAsync(Guid appointmentId, AppointmentStatus newStatus, CancellationToken cancellationToken)
+    {
+        var appointment = await _context.Appointments
+            .Include(a => a.Customer)
+            .Include(a => a.Tenant)
+            .FirstOrDefaultAsync(a => a.Id == appointmentId, cancellationToken);
+
+        if (appointment != null)
+        {
+            appointment.Status = newStatus;
+            await _context.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Randevu durumu güncellendi: {Id} -> {Status}", appointmentId, newStatus);
+
+            // Randevu durumu güncellendiğinde müşteriye anında teyit bildirimi gönder
+            if (appointment.Customer != null && appointment.Tenant != null)
+            {
+                await _notificationService.SendCustomerStatusUpdateAsync(
+                    appointment,
+                    appointment.Customer,
+                    appointment.Tenant,
+                    cancellationToken);
+            }
         }
     }
 }

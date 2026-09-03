@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SmartBooking.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using SmartBooking.Infrastructure.Persistence;
 namespace SmartBooking.Infrastructure.Migrations
 {
     [DbContext(typeof(SmartBookingDbContext))]
-    partial class SmartBookingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260829092821_AddUserEntity")]
+    partial class AddUserEntity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -36,9 +39,6 @@ namespace SmartBooking.Infrastructure.Migrations
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
-
-                    b.Property<bool>("CustomerWantsWhatsAppNotification")
-                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("EndTimeUtc")
                         .HasColumnType("timestamp with time zone");
@@ -74,6 +74,8 @@ namespace SmartBooking.Infrastructure.Migrations
                     b.HasIndex("ServiceId");
 
                     b.HasIndex("StaffId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Appointments");
                 });
@@ -144,6 +146,8 @@ namespace SmartBooking.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("TenantId");
+
                     b.ToTable("Services");
                 });
 
@@ -177,6 +181,8 @@ namespace SmartBooking.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("TenantId");
+
                     b.ToTable("StaffMembers");
                 });
 
@@ -196,9 +202,6 @@ namespace SmartBooking.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<bool>("NotifyOwnerOnNewAppointment")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
                         .HasColumnType("text");
@@ -209,6 +212,9 @@ namespace SmartBooking.Infrastructure.Migrations
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WhatsAppPhoneNumberId")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -312,11 +318,44 @@ namespace SmartBooking.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("SmartBooking.Domain.Entities.Tenant", null)
+                        .WithMany("Appointments")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Customer");
 
                     b.Navigation("Service");
 
                     b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("SmartBooking.Domain.Entities.Customer", b =>
+                {
+                    b.HasOne("SmartBooking.Domain.Entities.Tenant", null)
+                        .WithMany("Customers")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SmartBooking.Domain.Entities.Service", b =>
+                {
+                    b.HasOne("SmartBooking.Domain.Entities.Tenant", null)
+                        .WithMany("Services")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SmartBooking.Domain.Entities.Staff", b =>
+                {
+                    b.HasOne("SmartBooking.Domain.Entities.Tenant", null)
+                        .WithMany("StaffMembers")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SmartBooking.Domain.Entities.Customer", b =>
@@ -332,6 +371,17 @@ namespace SmartBooking.Infrastructure.Migrations
             modelBuilder.Entity("SmartBooking.Domain.Entities.Staff", b =>
                 {
                     b.Navigation("Appointments");
+                });
+
+            modelBuilder.Entity("SmartBooking.Domain.Entities.Tenant", b =>
+                {
+                    b.Navigation("Appointments");
+
+                    b.Navigation("Customers");
+
+                    b.Navigation("Services");
+
+                    b.Navigation("StaffMembers");
                 });
 #pragma warning restore 612, 618
         }
