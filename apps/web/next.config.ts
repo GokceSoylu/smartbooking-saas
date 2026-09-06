@@ -1,9 +1,7 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  outputFileTracingRoot: path.join(__dirname, "../../"),
+  /* Vercel native build kullandığı için standalone gerekmez */
 };
 
 export default nextConfig;
