@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* Vercel native build kullandığı için standalone gerekmez */
+  // Vercel yerel derleme için boş bırakılması yeterlidir
 };
 
 export default nextConfig;
