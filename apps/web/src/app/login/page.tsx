@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { login, registerTenant } from "@/lib/api";
-import { Lock, Mail, Store, User, Phone, ArrowRight, Sparkles } from "lucide-react";
+import { Lock, Mail, Store, User, Phone, ArrowRight, Sparkles, CheckCircle2, Clock } from "lucide-react";
 
 export default function AuthPage() {
     const router = useRouter();
     const [isRegister, setIsRegister] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isSubmitted, setIsSubmitted] = useState(false);
 
     // Ortak Alanlar
     const [email, setEmail] = useState("");
@@ -23,7 +24,6 @@ export default function AuthPage() {
 
     function handleBusinessNameChange(name: string) {
         setBusinessName(name);
-        // Otomatik URL slug üret (Örn: Burak Berber -> burakberber)
         const generatedSlug = name
             .toLowerCase()
             .replace(/ğ/g, "g")
@@ -42,9 +42,8 @@ export default function AuthPage() {
             setLoading(true);
             setError(null);
 
-            let res;
             if (isRegister) {
-                res = await registerTenant({
+                await registerTenant({
                     businessName,
                     slug,
                     fullName,
@@ -52,19 +51,56 @@ export default function AuthPage() {
                     password,
                     phoneNumber,
                 });
+                setIsSubmitted(true);
             } else {
-                res = await login({ email, password });
+                const res = await login({ email, password });
+                localStorage.setItem("auth_token", res.token);
+                localStorage.setItem("user_info", JSON.stringify(res));
+                router.push("/dashboard");
             }
-
-            localStorage.setItem("auth_token", res.token);
-            localStorage.setItem("user_info", JSON.stringify(res));
-
-            router.push("/dashboard");
         } catch (err: any) {
             setError(err.message || "İşlem sırasında bir hata oluştu.");
         } finally {
             setLoading(false);
         }
+    }
+
+    if (isSubmitted) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200/80 shadow-xl text-center space-y-5">
+                    <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto border border-emerald-100">
+                        <CheckCircle2 className="w-8 h-8" />
+                    </div>
+
+                    <h2 className="text-xl font-bold text-slate-900 tracking-tight">Başvurunuz Alındı!</h2>
+
+                    <p className="text-xs leading-5 text-slate-500">
+                        <strong className="text-slate-800">{businessName}</strong> işletme başvurunuz sistem yöneticisine iletildi.
+                        Hesabınız onaylandığında ve aboneliğiniz başlatıldığında WhatsApp üzerinden bilgilendirileceksiniz.
+                    </p>
+
+                    <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-left flex items-start gap-3">
+                        <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-amber-800 leading-4">
+                            Güvenlik ve abonelik doğrulaması sebebiyle yönetici onayı verilmeden panele giriş yapılamaz.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setIsSubmitted(false);
+                            setIsRegister(false);
+                            setError(null);
+                        }}
+                        className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all"
+                    >
+                        Giriş Ekranına Dön
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -75,11 +111,11 @@ export default function AuthPage() {
                         {isRegister ? <Sparkles className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
                     </div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                        {isRegister ? "İşletmeni Oluştur" : "İşletme Girişi"}
+                        {isRegister ? "İşletme Ön Başvurusu" : "İşletme Girişi"}
                     </h1>
                     <p className="text-xs text-slate-500">
                         {isRegister
-                            ? "Akıllı randevu ve WhatsApp otomasyonunu başlatın."
+                            ? "Başvurunuz onaylandıktan sonra 30 günlük deneme aboneliğiniz başlar."
                             : "Randevu ve yönetim paneline erişmek için oturum açın."}
                     </p>
                 </div>
@@ -194,12 +230,11 @@ export default function AuthPage() {
                         disabled={loading}
                         className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
                     >
-                        {loading ? "İşleniyor..." : isRegister ? "Hemen Kaydol & Başla" : "Panele Giriş Yap"}
+                        {loading ? "İşleniyor..." : isRegister ? "Ön Başvuruyu Gönder" : "Panele Giriş Yap"}
                         <ArrowRight className="w-4 h-4" />
                     </button>
                 </form>
 
-                {/* Geçiş Butonu */}
                 <div className="text-center pt-2">
                     <button
                         type="button"
@@ -210,8 +245,8 @@ export default function AuthPage() {
                         className="text-xs text-slate-500 hover:text-slate-900 transition-colors"
                     >
                         {isRegister
-                            ? "Zaten bir hesabınız var mı? Giriş Yapın"
-                            : "Yeni bir işletme misiniz? Ücretsiz Kayıt Olun"}
+                            ? "Zaten onaylı bir hesabınız var mı? Giriş Yapın"
+                            : "Yeni bir işletme misiniz? İşletme Başvurusu Yapın"}
                     </button>
                 </div>
             </div>

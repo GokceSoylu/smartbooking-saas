@@ -32,18 +32,15 @@ public class AppointmentService : IAppointmentService
         var nextDay = targetDate.AddDays(1);
         var dayOfWeek = targetDate.DayOfWeek;
 
-        // O güne ait çalışma saatini tenant üzerinden bul
         var workingHour = await _context.WorkingHours
             .AsNoTracking()
             .FirstOrDefaultAsync(w => w.DayOfWeek == dayOfWeek, cancellationToken);
 
-        // İşletme o gün tatil/kapalı olarak işaretlendiyse doğrudan boş liste dön
         if (workingHour != null && workingHour.IsClosed)
         {
             return new List<TimeSlotDto>();
         }
 
-        // Kayıt tanımlanmamışsa varsayılan 09:00 - 19:00 saat aralığını baz al
         var openTime = workingHour?.OpeningTime ?? new TimeSpan(9, 0, 0);
         var closeTime = workingHour?.ClosingTime ?? new TimeSpan(19, 0, 0);
 
@@ -111,7 +108,6 @@ public class AppointmentService : IAppointmentService
         var endTimeUtc = startTimeUtc.AddMinutes(service.DurationInMinutes);
         var dayOfWeek = startTimeUtc.DayOfWeek;
 
-        // Tatil günü randevu alımını engelle
         var workingHour = await _context.WorkingHours
             .AsNoTracking()
             .FirstOrDefaultAsync(w => w.DayOfWeek == dayOfWeek, cancellationToken);
@@ -137,16 +133,22 @@ public class AppointmentService : IAppointmentService
         var customer = await _context.Customers
             .FirstOrDefaultAsync(c => c.PhoneNumber == trimmedPhone, cancellationToken);
 
+        // Müşteri kaydı varsa bile son girdiği isim ve notla güncelle (üyelik zorunluluğu yok)
         if (customer == null)
         {
             customer = new Customer
             {
-                FullName = request.CustomerFullName,
+                FullName = request.CustomerFullName.Trim(),
                 PhoneNumber = trimmedPhone,
                 Notes = request.CustomerNotes,
                 TenantId = service.TenantId
             };
             _context.Customers.Add(customer);
+        }
+        else
+        {
+            customer.FullName = request.CustomerFullName.Trim();
+            customer.Notes = request.CustomerNotes;
         }
 
         var appointment = new Appointment
@@ -165,7 +167,6 @@ public class AppointmentService : IAppointmentService
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Hem müşteriye hem işletme sahibine WhatsApp fırlat
         await _notificationService.SendAppointmentRequestNotificationAsync(
             appointment,
             tenant,

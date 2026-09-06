@@ -38,7 +38,7 @@ public class MetaWhatsAppNotificationService : INotificationService
             await SendDirectTextMessageAsync(customer.PhoneNumber, customerMsg, cancellationToken);
         }
 
-        // 2. İşletme Sahibine İnteraktif Butonlu WhatsApp Bildirimi (Onayla / Reddet)
+        // 2. İşletme Sahibine Bildirim
         var ownerPhone = !string.IsNullOrWhiteSpace(tenant.PhoneNumber) ? tenant.PhoneNumber : customer.PhoneNumber;
 
         if (tenant.NotifyOwnerOnNewAppointment || !string.IsNullOrWhiteSpace(ownerPhone))
@@ -95,15 +95,8 @@ public class MetaWhatsAppNotificationService : INotificationService
 
     private async Task SendDirectTextMessageAsync(string toPhone, string textBody, CancellationToken cancellationToken)
     {
-        var token = _configuration["WhatsApp:AccessToken"];
-        var phoneId = _configuration["WhatsApp:PhoneNumberId"];
-        var version = _configuration["WhatsApp:ApiVersion"] ?? "v22.0";
-
-        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(phoneId))
-        {
-            _logger.LogWarning("WhatsApp API ayarları appsettings içinde eksik.");
-            return;
-        }
+        var (token, phoneId, version) = GetConfig();
+        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(phoneId)) return;
 
         var cleanPhone = FormatPhoneNumber(toPhone);
 
@@ -116,29 +109,7 @@ public class MetaWhatsAppNotificationService : INotificationService
             text = new { preview_url = false, body = textBody }
         };
 
-        var requestUrl = $"https://graph.facebook.com/{version}/{phoneId}/messages";
-        var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-        try
-        {
-            var response = await _httpClient.SendAsync(request, cancellationToken);
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            if (response.IsSuccessStatusCode)
-            {
-                _logger.LogInformation("WhatsApp Mesajı İletildi -> {Phone} - Response: {Response}", cleanPhone, responseBody);
-            }
-            else
-            {
-                _logger.LogError("WhatsApp API Hatası ({StatusCode}) -> {Phone}: {Body}", response.StatusCode, cleanPhone, responseBody);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "WhatsApp mesajı gönderilirken bağlantı hatası oluştu: {Phone}", cleanPhone);
-        }
+        await ExecutePostAsync(cleanPhone, payload, cancellationToken);
     }
 
     private async Task SendInteractiveButtonMessageAsync(
@@ -147,15 +118,8 @@ public class MetaWhatsAppNotificationService : INotificationService
         IEnumerable<dynamic> buttons,
         CancellationToken cancellationToken)
     {
-        var token = _configuration["WhatsApp:AccessToken"];
-        var phoneId = _configuration["WhatsApp:PhoneNumberId"];
-        var version = _configuration["WhatsApp:ApiVersion"] ?? "v22.0";
-
-        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(phoneId))
-        {
-            _logger.LogWarning("WhatsApp API ayarları appsettings içinde eksik.");
-            return;
-        }
+        var (token, phoneId, version) = GetConfig();
+        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(phoneId)) return;
 
         var cleanPhone = FormatPhoneNumber(toPhone);
 
@@ -183,8 +147,23 @@ public class MetaWhatsAppNotificationService : INotificationService
             }
         };
 
+        var isSuccess = await ExecutePostAsync(cleanPhone, payload, cancellationToken);
+
+        // Meta test ortamında interaktif buton reddedilirse düz metin olarak ilet
+        if (!isSuccess)
+        {
+            _logger.LogWarning("Butonlu mesaj gönderilemedi, işletme sahibine düz metin alternatifi gönderiliyor: {Phone}", cleanPhone);
+            var fallbackText = $"{bodyText}\n\nOnaylamak için 'EVET', iptal etmek için 'IPTAL' yazıp bu mesaja cevap verebilirsiniz.";
+            await SendDirectTextMessageAsync(cleanPhone, fallbackText, cancellationToken);
+        }
+    }
+
+    private async Task<bool> ExecutePostAsync(string cleanPhone, object payload, CancellationToken cancellationToken)
+    {
+        var (token, phoneId, version) = GetConfig();
         var requestUrl = $"https://graph.facebook.com/{version}/{phoneId}/messages";
-        var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl);
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
@@ -195,24 +174,52 @@ public class MetaWhatsAppNotificationService : INotificationService
 
             if (response.IsSuccessStatusCode)
             {
-                _logger.LogInformation("WhatsApp Butonlu Bildirim Gönderildi -> {Phone}", cleanPhone);
+                _logger.LogInformation("WhatsApp Bildirimi Başarılı -> {Phone} - Response: {Response}", cleanPhone, responseBody);
+                return true;
             }
-            else
-            {
-                _logger.LogError("WhatsApp Buton Gönderme Hatası ({Code}) -> {Phone}: {Body}", response.StatusCode, cleanPhone, responseBody);
-            }
+
+            _logger.LogError("WhatsApp API Hatası ({StatusCode}) -> {Phone}: {Body}", response.StatusCode, cleanPhone, responseBody);
+            return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "WhatsApp buton mesajı gönderilirken bağlantı hatası: {Phone}", cleanPhone);
+            _logger.LogError(ex, "WhatsApp mesajı gönderilirken bağlantı hatası: {Phone}", cleanPhone);
+            return false;
         }
+    }
+
+    private (string? Token, string? PhoneId, string Version) GetConfig()
+    {
+        var token = _configuration["WhatsApp:AccessToken"];
+        var phoneId = _configuration["WhatsApp:PhoneNumberId"] ?? "1284255068109116";
+        var version = _configuration["WhatsApp:ApiVersion"] ?? "v22.0";
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            _logger.LogWarning("WhatsApp AccessToken ayarı appsettings içinde eksik.");
+        }
+
+        return (token, phoneId, version);
     }
 
     private string FormatPhoneNumber(string raw)
     {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
         var digits = new string(raw.Where(char.IsDigit).ToArray());
-        if (digits.StartsWith("0")) digits = digits[1..];
-        if (!digits.StartsWith("90")) digits = "90" + digits;
+
+        // Başındaki 0'ı kaldır (0552... -> 552...)
+        if (digits.StartsWith("0"))
+        {
+            digits = digits[1..];
+        }
+
+        // Başında 90 yoksa ekle (552... -> 90552...)
+        if (!digits.StartsWith("90"))
+        {
+            digits = "90" + digits;
+        }
+
         return digits;
     }
 }

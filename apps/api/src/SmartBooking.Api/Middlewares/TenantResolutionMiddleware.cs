@@ -13,7 +13,18 @@ public class TenantResolutionMiddleware
 
     public async Task InvokeAsync(HttpContext context, ICurrentTenantService currentTenantService)
     {
-        // 1. Önce Header kontrolü (X-Tenant-Id: GUID)
+        var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
+
+        // Admin, Webhook ve Swagger endpoint'leri tenant filtresine tabi tutulmaz
+        if (path.StartsWith("/api/admin") ||
+            path.StartsWith("/api/webhook") ||
+            path.StartsWith("/swagger"))
+        {
+            await _next(context);
+            return;
+        }
+
+        // Header kontrolü (X-Tenant-Id: GUID)
         if (context.Request.Headers.TryGetValue("X-Tenant-Id", out var tenantHeader) &&
             Guid.TryParse(tenantHeader, out var tenantId))
         {

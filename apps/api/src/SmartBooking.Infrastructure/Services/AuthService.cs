@@ -38,13 +38,15 @@ public class AuthService : IAuthService
         if (slugExists)
             throw new InvalidOperationException("Bu işletme bağlantı adı (slug) zaten kullanımda.");
 
-        // 1. Yeni İşletme Oluştur
+        // 1. Yeni İşletme Oluştur (Yönetici Onayı Bekleyecek Şekilde Pasif Başlat)
         var tenant = new Tenant
         {
             Name = request.BusinessName.Trim(),
             Slug = normalizedSlug,
             PhoneNumber = request.PhoneNumber.Trim(),
-            IsActive = true
+            IsApproved = false,                    // Sen onaylamadan sisteme giremez
+            IsActive = false,                      // Başvuru aşamasında pasif
+            SubscriptionExpiresAtUtc = null        // Onaylandığında süre tanımlanacak
         };
         _context.Tenants.Add(tenant);
         await _context.SaveChangesAsync(cancellationToken);
@@ -79,26 +81,56 @@ public class AuthService : IAuthService
         _context.Users.Add(user);
         await _context.SaveChangesAsync(cancellationToken);
 
-        var token = GenerateJwtToken(user);
-        return new AuthResponse(token, user.FullName, user.Email, user.TenantId);
+        // Kayıt olan işletme onaylanmadan token üretmiyoruz; bilgilendirici boş token dönüyoruz
+        return new AuthResponse(
+            string.Empty,
+            user.FullName,
+            user.Email,
+            user.TenantId
+        );
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = request.Email.ToLower().Trim();
 
+        // Multi-tenant filtrelerini yoksayarak kullanıcıyı bul
         var user = await _context.Users
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
-            throw new UnauthorizedAccessException("E-posta veya şifre hatalı.");
+            throw new UnauthorizedAccessException("Geçersiz e-posta veya şifre.");
         }
 
-        if (!user.IsActive)
+        // Kullanıcının bağlı olduğu işletmeyi doğrula
+        if (user.TenantId != Guid.Empty)
         {
-            throw new UnauthorizedAccessException("Hesabınız pasif durumdadır.");
+            var tenant = await _context.Tenants
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == user.TenantId, cancellationToken);
+
+            if (tenant == null)
+            {
+                throw new UnauthorizedAccessException("Kullanıcıya bağlı bir işletme kaydı bulunamadı.");
+            }
+
+            if (!tenant.IsApproved)
+            {
+                throw new UnauthorizedAccessException("İşletme hesabınız henüz yönetici onayından geçmemiştir. Lütfen onay bekleyin.");
+            }
+
+            if (!tenant.IsActive)
+            {
+                throw new UnauthorizedAccessException("İşletmenizin sistem erişimi geçici olarak durdurulmuştur.");
+            }
+
+            if (tenant.SubscriptionExpiresAtUtc.HasValue && tenant.SubscriptionExpiresAtUtc.Value < DateTime.UtcNow)
+            {
+                throw new UnauthorizedAccessException("Abonelik süreniz sona ermiştir. Lütfen aboneliğinizi yenileyiniz.");
+            }
         }
 
         var token = GenerateJwtToken(user);

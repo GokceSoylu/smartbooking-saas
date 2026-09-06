@@ -290,3 +290,91 @@ export async function updateTenantNotificationSettings(
     });
     if (!res.ok) throw new Error("Ayar güncellenemedi");
 }
+// --- SUPERADMIN TENANT YÖNETİMİ ---
+
+export interface AdminTenantItem {
+    id: string;
+    name: string;
+    slug: string;
+    phoneNumber: string;
+    isApproved: boolean;
+    isActive: boolean;
+    subscriptionExpiresAtUtc: string | null;
+    createdAtUtc: string;
+}
+
+export async function fetchAdminTenants(): Promise<AdminTenantItem[]> {
+    const url = `${API_BASE_URL}/admin/tenants`;
+    console.log("İstek atılan URL:", url);
+
+    try {
+        const res = await fetch(url, {
+            cache: "no-store",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error("API Hatası Detayı:", res.status, errText);
+            throw new Error(`Hata (${res.status}): ${errText}`);
+        }
+
+        return res.json();
+    } catch (error) {
+        console.error("Bağlantı Hatası:", error);
+        throw error;
+    }
+}
+
+export async function approveTenant(id: string): Promise<{ message: string }> {
+    const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}/approve`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+    });
+
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "İşletme onaylanamadı.");
+    }
+
+    return res.json();
+}
+
+export async function toggleTenantStatus(id: string): Promise<{ message: string; isActive: boolean }> {
+    const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}/toggle-status`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+    });
+
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "İşletme durumu güncellenemedi.");
+    }
+
+    return res.json();
+}
+
+export async function extendTenantSubscription(id: string, days: number): Promise<{ message: string }> {
+    const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}/extend-subscription?days=${days}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+    });
+
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Abonelik uzatılamadı.");
+    }
+
+    return res.json();
+}

@@ -12,7 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// CORS Politikası (Geliştirme aşamasında her yerden istek alabilir)
+// CORS Politikası
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -35,21 +35,22 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 
-// Canlı Meta WhatsApp Bildirim Servisi (Doğrudan HttpClient Factory ile)
+// Canlı Meta WhatsApp Bildirim Servisi (HttpClient Factory ile)
 builder.Services.AddHttpClient<INotificationService, MetaWhatsAppNotificationService>();
-
-// Geriye dönük uyumluluk için (IWhatsAppService doğrudan kullanılıyorsa)
 builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
 
-// No-Show Hatırlatıcı Arka Plan Servisi
+// Arka Plan Görevleri
 builder.Services.AddHostedService<AppointmentReminderWorker>();
 
 var app = builder.Build();
 
-app.UseHttpsRedirection();
-
-// CORS Middleware (Routing/Controller öncesinde çalışmalı)
+// CORS tüm isteklerin en başında devreye girmeli
 app.UseCors();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // Tenant Çözümleme Middleware'i
 app.UseMiddleware<TenantResolutionMiddleware>();

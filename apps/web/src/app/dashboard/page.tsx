@@ -75,34 +75,11 @@ export default function AdminDashboardPage() {
         "Cumartesi",
     ];
 
-    useEffect(() => {
-        const token = localStorage.getItem("auth_token");
-        const userJson = localStorage.getItem("user_info");
-
-        if (!token || !userJson) {
-            router.push("/login");
-            return;
-        }
-
-        try {
-            const user = JSON.parse(userJson);
-            setTenantId(user.tenantId);
-            setBusinessOwner(user.fullName);
-            loadData(user.tenantId);
-        } catch {
-            localStorage.removeItem("auth_token");
-            localStorage.removeItem("user_info");
-            router.push("/login");
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     async function loadData(targetTenantId?: string) {
         const tId = targetTenantId || tenantId;
         if (!tId) return;
 
         try {
-            setLoading(true);
             const [appData, srvData, staffData, hoursData] = await Promise.all([
                 fetchTenantAppointments(tId),
                 fetchServices(tId),
@@ -120,6 +97,36 @@ export default function AdminDashboardPage() {
             setLoading(false);
         }
     }
+
+    useEffect(() => {
+        const rawUser = localStorage.getItem("user_info");
+        let currentTenantId = "";
+
+        if (rawUser) {
+            try {
+                const parsed = JSON.parse(rawUser);
+                if (parsed.tenantId) {
+                    currentTenantId = parsed.tenantId;
+                    setTenantId(parsed.tenantId);
+                }
+                if (parsed.fullName) {
+                    setBusinessOwner(parsed.fullName);
+                }
+            } catch (e) {
+                console.error("user_info okunamadı", e);
+            }
+        }
+
+        // İlk açılışta verileri yükle
+        loadData(currentTenantId);
+
+        // WhatsApp'tan gelen buton onaylarını ekrana yansıtmak için 5 saniyede bir polling
+        const interval = setInterval(() => {
+            loadData(currentTenantId);
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, []);
 
     function handleLogout() {
         localStorage.removeItem("auth_token");
@@ -348,8 +355,8 @@ export default function AdminDashboardPage() {
                                     key={item.key}
                                     onClick={() => setActiveTab(item.key)}
                                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-xs font-bold transition ${active
-                                            ? "bg-slate-950 text-white shadow-lg shadow-slate-950/10"
-                                            : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                                        ? "bg-slate-950 text-white shadow-lg shadow-slate-950/10"
+                                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                                         }`}
                                 >
                                     <Icon className="h-4 w-4" />
@@ -357,8 +364,8 @@ export default function AdminDashboardPage() {
                                     {item.count !== undefined && (
                                         <span
                                             className={`rounded-full px-2 py-0.5 text-[9px] ${active
-                                                    ? "bg-white/10 text-white"
-                                                    : "bg-slate-100 text-slate-400"
+                                                ? "bg-white/10 text-white"
+                                                : "bg-slate-100 text-slate-400"
                                                 }`}
                                         >
                                             {item.count}
@@ -467,8 +474,8 @@ export default function AdminDashboardPage() {
                                     key={item.key}
                                     onClick={() => setActiveTab(item.key)}
                                     className={`flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 text-[11px] font-bold ${activeTab === item.key
-                                            ? "bg-slate-950 text-white"
-                                            : "border border-slate-200 bg-white text-slate-500"
+                                        ? "bg-slate-950 text-white"
+                                        : "border border-slate-200 bg-white text-slate-500"
                                         }`}
                                 >
                                     <Icon className="h-3.5 w-3.5" />
@@ -562,8 +569,8 @@ export default function AdminDashboardPage() {
                                                 key={item.label}
                                                 onClick={() => setFilter(item.val)}
                                                 className={`shrink-0 rounded-lg px-2.5 py-2 text-[10px] font-bold transition ${filter === item.val
-                                                        ? "bg-slate-950 text-white"
-                                                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                                    ? "bg-slate-950 text-white"
+                                                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                                                     }`}
                                             >
                                                 {item.label}
@@ -582,17 +589,11 @@ export default function AdminDashboardPage() {
                                         ))}
                                     </div>
                                 ) : filteredAppointments.length === 0 ? (
-                                    <div className="px-6 py-16 text-center">
-                                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
-                                            <CalendarDays className="h-5 w-5 text-slate-400" />
-                                        </div>
-                                        <p className="mt-4 text-sm font-bold text-slate-600">
-                                            Bu filtrede randevu bulunamadı.
-                                        </p>
-                                        <p className="mt-1 text-xs text-slate-400">
-                                            Yeni randevular geldiğinde burada görünecek.
-                                        </p>
-                                    </div>
+                                    <EmptyState
+                                        icon={CalendarDays}
+                                        title="Bu filtrede randevu bulunamadı."
+                                        text="Yeni randevular geldiğinde burada görünecek."
+                                    />
                                 ) : (
                                     <>
                                         {/* Desktop table */}
