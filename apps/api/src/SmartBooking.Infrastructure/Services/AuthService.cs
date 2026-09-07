@@ -38,15 +38,15 @@ public class AuthService : IAuthService
         if (slugExists)
             throw new InvalidOperationException("Bu işletme bağlantı adı (slug) zaten kullanımda.");
 
-        // 1. Yeni İşletme Oluştur (Yönetici Onayı Bekleyecek Şekilde Pasif Başlat)
+        // 1. Yeni İşletme Oluştur (Doğrudan Onaylı ve 30 Günlük Deneme Süresi ile Başlat)
         var tenant = new Tenant
         {
             Name = request.BusinessName.Trim(),
             Slug = normalizedSlug,
             PhoneNumber = request.PhoneNumber.Trim(),
-            IsApproved = false,                    // Sen onaylamadan sisteme giremez
-            IsActive = false,                      // Başvuru aşamasında pasif
-            SubscriptionExpiresAtUtc = null        // Onaylandığında süre tanımlanacak
+            IsApproved = true,                                     // Anında onaylı başlar
+            IsActive = true,                                       // Randevu alımına ve girişe açık
+            SubscriptionExpiresAtUtc = DateTime.UtcNow.AddDays(30) // 30 gün ücretsiz deneme
         };
         _context.Tenants.Add(tenant);
         await _context.SaveChangesAsync(cancellationToken);
@@ -81,9 +81,11 @@ public class AuthService : IAuthService
         _context.Users.Add(user);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Kayıt olan işletme onaylanmadan token üretmiyoruz; bilgilendirici boş token dönüyoruz
+        // 4. Kullanıcı kayıt olduğu anda paneline girebilmesi için Token üret
+        var token = GenerateJwtToken(user);
+
         return new AuthResponse(
-            string.Empty,
+            token,
             user.FullName,
             user.Email,
             user.TenantId
@@ -102,6 +104,13 @@ public class AuthService : IAuthService
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
             throw new UnauthorizedAccessException("Geçersiz e-posta veya şifre.");
+        }
+
+        // Süper Admin kontrolü: Admin rolündekiler işletme kısıtlamalarına takılmaz
+        if (user.Role == "Admin")
+        {
+            var adminToken = GenerateJwtToken(user);
+            return new AuthResponse(adminToken, user.FullName, user.Email, user.TenantId);
         }
 
         // Kullanıcının bağlı olduğu işletmeyi doğrula
