@@ -9,12 +9,12 @@ interface PageProps {
 export default async function TenantBookingPage({ params }: PageProps) {
     const { slug } = await params;
 
-    let tenant;
+    let tenant = null;
 
     try {
         tenant = await fetchTenantBySlug(slug);
-    } catch {
-        notFound();
+    } catch (error) {
+        console.error("fetchTenantBySlug çağrısında API hatası alındı:", error);
     }
 
     if (!tenant) {
