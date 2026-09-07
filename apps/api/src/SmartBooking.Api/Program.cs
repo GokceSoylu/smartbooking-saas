@@ -43,7 +43,20 @@ builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
 builder.Services.AddHostedService<AppointmentReminderWorker>();
 
 var app = builder.Build();
-
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<SmartBookingDbContext>(); // Kendi DbContext adın
+        context.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Veritabanı migration uygulanırken hata oluştu.");
+    }
+}
 // CORS tüm isteklerin en başında devreye girmeli
 app.UseCors();
 
