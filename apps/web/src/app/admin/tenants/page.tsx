@@ -48,10 +48,12 @@ export default function SuperAdminTenantsPage() {
 
     // 🔒 GÜVENLİK KONTROLÜ
     useEffect(() => {
-        const token = localStorage.getItem("token"); // veya kullandığınız auth token key'i
+        // Fix 1: Login sayfasında kaydedilen auth_token key'i kullanıldı
+        const token = localStorage.getItem("auth_token");
 
         if (!token) {
-            router.replace("/admin/login");
+            // Fix 2: Var olmayan /admin/login yerine mevcut /login sayfasına yönlendirildi
+            router.replace("/login");
             return;
         }
 

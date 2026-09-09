@@ -5,6 +5,23 @@ import { useRouter } from "next/navigation";
 import { login, registerTenant } from "@/lib/api";
 import { Lock, Mail, Store, User, Phone, ArrowRight, Sparkles, CheckCircle2, Clock } from "lucide-react";
 
+// JWT token'ı parse edip rolünü okuyan yardımcı fonksiyon
+function parseJwt(token: string) {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+        );
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        return null;
+    }
+}
+
 export default function AuthPage() {
     const router = useRouter();
     const [isRegister, setIsRegister] = useState(false);
@@ -56,7 +73,16 @@ export default function AuthPage() {
                 const res = await login({ email, password });
                 localStorage.setItem("auth_token", res.token);
                 localStorage.setItem("user_info", JSON.stringify(res));
-                router.push("/dashboard");
+
+                // Rol kontrolü ve Akıllı Yönlendirme
+                const decoded = parseJwt(res.token);
+                const userRole = res.role || decoded?.role || decoded?.["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
+
+                if (userRole === "Admin") {
+                    router.push("/admin/tenants");
+                } else {
+                    router.push("/dashboard");
+                }
             }
         } catch (err: any) {
             setError(err.message || "İşlem sırasında bir hata oluştu.");
