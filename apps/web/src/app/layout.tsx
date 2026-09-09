@@ -13,13 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gökçe | Yazılımcı & Portfolyo",
-  description: "projelerim",
+  title: "Randevo",
+  description: "online randevu",
   icons: {
-    icon: "/Users/gokcesoylu/smartbooking-saas/apps/web/public/Gray Olive White Icon Monogram Business Logo.svg"
+    icon: "/logo.svg", // public klasörünün içindeki dosya adı
   },
 };
-
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
