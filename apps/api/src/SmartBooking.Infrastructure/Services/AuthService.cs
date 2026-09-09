@@ -100,7 +100,23 @@ public class AuthService : IAuthService
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
 
-        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        if (user == null)
+        {
+            throw new UnauthorizedAccessException("Geçersiz e-posta veya şifre.");
+        }
+
+        // BCrypt doğrulaması (hatalı hash formatında uygulamanın çökmesini önler)
+        bool isPasswordValid = false;
+        try
+        {
+            isPasswordValid = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
+        }
+        catch
+        {
+            isPasswordValid = false;
+        }
+
+        if (!isPasswordValid)
         {
             throw new UnauthorizedAccessException("Geçersiz e-posta veya şifre.");
         }
@@ -112,7 +128,7 @@ public class AuthService : IAuthService
             return new AuthResponse(adminToken, user.FullName, user.Email, user.TenantId);
         }
 
-        // Kullanıcının bağlı olduğu işletmeyi doğrula (Guid.Empty kontrolü yapılıyor)
+        // Kullanıcının bağlı olduğu işletmeyi doğrula
         if (user.TenantId != Guid.Empty)
         {
             var tenant = await _context.Tenants
