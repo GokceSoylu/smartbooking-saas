@@ -74,6 +74,7 @@ export interface LoginResponse {
     fullName: string;
     email: string;
     tenantId: string;
+    role?: string;
 }
 
 export interface AdminTenantItem {
