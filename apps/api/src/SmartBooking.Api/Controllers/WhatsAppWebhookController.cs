@@ -41,8 +41,7 @@ public class WhatsAppWebhookController : ControllerBase
             return Content(challenge ?? string.Empty, "text/plain");
         }
 
-        _logger.LogWarning("Geçersiz Webhook doğrulama isteği. Token uyuşmadı. Beklenen: {Expected}, Gelen: {Received}", expectedToken, token);
-        return Unauthorized(); // Forbid() yerine Unauthorized()
+        return Unauthorized();
     }
 
     [HttpPost]
@@ -50,10 +49,7 @@ public class WhatsAppWebhookController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Webhook Ham İstek Geldi: {Raw}", payload.ToString());
-
-            if (!payload.TryGetProperty("entry", out var entries))
-                return Ok();
+            if (!payload.TryGetProperty("entry", out var entries)) return Ok();
 
             foreach (var entry in entries.EnumerateArray())
             {
@@ -69,25 +65,21 @@ public class WhatsAppWebhookController : ControllerBase
                         var senderPhone = message.TryGetProperty("from", out var p) ? p.GetString() : null;
                         var messageType = message.TryGetProperty("type", out var t) ? t.GetString() : null;
 
-                        // 1. Buton Tıklaması
                         if (messageType == "interactive" && message.TryGetProperty("interactive", out var interactive))
                         {
                             if (interactive.TryGetProperty("button_reply", out var btnReply) &&
                                 btnReply.TryGetProperty("id", out var btnIdProp))
                             {
                                 var buttonId = btnIdProp.GetString();
-                                _logger.LogInformation("Tıklanan Buton: {BtnId} Gönderen: {Phone}", buttonId, senderPhone);
                                 await HandleButtonReplyAsync(senderPhone, buttonId, cancellationToken);
                             }
                         }
-                        // 2. Metin Yanıtı
-                        else if (messageType == "text" && message.TryGetProperty("text", out var textObj))
+                        else if (messageType == "button" && message.TryGetProperty("button", out var btnObj))
                         {
-                            if (textObj.TryGetProperty("body", out var bodyProp))
+                            if (btnObj.TryGetProperty("payload", out var payloadProp))
                             {
-                                var textBody = bodyProp.GetString();
-                                _logger.LogInformation("Gelen Metin: {Body} Gönderen: {Phone}", textBody, senderPhone);
-                                await HandleTextReplyAsync(senderPhone, textBody, cancellationToken);
+                                var buttonId = payloadProp.GetString();
+                                await HandleButtonReplyAsync(senderPhone, buttonId, cancellationToken);
                             }
                         }
                     }
@@ -98,7 +90,7 @@ public class WhatsAppWebhookController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "WhatsApp Webhook işlenirken istisna oluştu.");
+            _logger.LogError(ex, "WhatsApp Webhook işlenirken hata oluştu.");
             return Ok();
         }
     }
@@ -125,34 +117,6 @@ public class WhatsAppWebhookController : ControllerBase
         }
     }
 
-    private async Task HandleTextReplyAsync(string? phone, string? text, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(phone) || string.IsNullOrWhiteSpace(text)) return;
-
-        var cleanText = text.Trim().ToLowerInvariant();
-        var appointment = await _context.Appointments
-            .IgnoreQueryFilters()
-            .Include(a => a.Customer)
-            .Where(a => a.Status == AppointmentStatus.Pending)
-            .OrderByDescending(a => a.StartTimeUtc)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (appointment == null)
-        {
-            _logger.LogWarning("Bekleyen randevu bulunamadı.");
-            return;
-        }
-
-        if (cleanText is "evet" or "onay" or "onayla")
-        {
-            await UpdateStatusAndNotifyCustomerAsync(appointment.Id, AppointmentStatus.Confirmed, cancellationToken);
-        }
-        else if (cleanText is "iptal" or "hayır" or "red" or "reddet")
-        {
-            await UpdateStatusAndNotifyCustomerAsync(appointment.Id, AppointmentStatus.Rejected, cancellationToken);
-        }
-    }
-
     private async Task UpdateStatusAndNotifyCustomerAsync(Guid appointmentId, AppointmentStatus newStatus, CancellationToken cancellationToken)
     {
         var appointment = await _context.Appointments
@@ -166,7 +130,6 @@ public class WhatsAppWebhookController : ControllerBase
             appointment.UpdatedAtUtc = DateTime.UtcNow;
 
             await _context.SaveChangesAsync(cancellationToken);
-            _logger.LogInformation("Randevu Durumu Başarıyla Değişti -> ID: {Id} -> {Status}", appointmentId, newStatus);
 
             var tenant = await _context.Tenants
                 .IgnoreQueryFilters()
@@ -180,10 +143,6 @@ public class WhatsAppWebhookController : ControllerBase
                     tenant,
                     cancellationToken);
             }
-        }
-        else
-        {
-            _logger.LogWarning("Güncellenecek randevu ID ile eşleşmedi: {Id}", appointmentId);
         }
     }
 }
