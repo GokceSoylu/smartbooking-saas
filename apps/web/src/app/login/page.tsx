@@ -76,10 +76,18 @@ export default function AuthPage() {
 
                 // Rol kontrolü ve Akıllı Yönlendirme
                 const decoded = parseJwt(res.token);
-                const userRole = res.role || decoded?.role || decoded?.["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
+                const rawRole =
+                    res.role ||
+                    decoded?.role ||
+                    decoded?.Role ||
+                    decoded?.["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ||
+                    "";
 
-                if (userRole === "Admin") {
-                    router.push("/admin/tenants");
+                const userRole = String(rawRole).toLowerCase();
+
+                // SuperAdmin veya Admin olan kullanıcıları İşletmeler / Abonelik Sistem Paneline yönlendir
+                if (userRole === "superadmin" || userRole === "admin") {
+                    router.push("/admin");
                 } else {
                     router.push("/dashboard");
                 }
