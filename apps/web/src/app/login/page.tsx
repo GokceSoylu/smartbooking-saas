@@ -87,7 +87,7 @@ export default function AuthPage() {
 
                 // SuperAdmin veya Admin olan kullanıcıları İşletmeler / Abonelik Sistem Paneline yönlendir
                 if (userRole === "superadmin" || userRole === "admin") {
-                    router.push("/admin");
+                    router.push("/admin/tenants");
                 } else {
                     router.push("/dashboard");
                 }
