@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
     Building2,
     CheckCircle2,
@@ -10,7 +11,8 @@ import {
     RefreshCcw,
     ShieldCheck,
     Unlock,
-    AlertTriangle
+    AlertTriangle,
+    ShieldAlert
 } from "lucide-react";
 import {
     AdminTenantItem,
@@ -20,10 +22,56 @@ import {
     toggleTenantStatus
 } from "@/lib/api";
 
+// JWT token'ı basitçe parse edip rolü okuyan yardımcı fonksiyon
+function parseJwt(token: string) {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+        );
+        return JSON.parse(jsonPayload);
+    } catch (e) {
+        return null;
+    }
+}
+
 export default function SuperAdminTenantsPage() {
+    const router = useRouter();
+    const [isAuthorized, setIsAuthorized] = useState(false);
     const [tenants, setTenants] = useState<AdminTenantItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+    // 🔒 GÜVENLİK KONTROLÜ
+    useEffect(() => {
+        const token = localStorage.getItem("token"); // veya kullandığınız auth token key'i
+
+        if (!token) {
+            router.replace("/admin/login");
+            return;
+        }
+
+        const decoded = parseJwt(token);
+
+        // .NET Core ClaimTypes.Role "role" veya "http://schemas.microsoft.com/ws/2008/06/identity/claims/role" olarak gelir
+        const userRole = decoded?.role || decoded?.["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
+
+        if (userRole !== "Admin") {
+            // Kullanıcı Admin değilse erişimi engelle
+            setIsAuthorized(false);
+            setTimeout(() => {
+                router.replace("/dashboard");
+            }, 2000);
+            return;
+        }
+
+        setIsAuthorized(true);
+        loadTenants();
+    }, [router]);
 
     async function loadTenants() {
         try {
@@ -37,10 +85,6 @@ export default function SuperAdminTenantsPage() {
             setLoading(false);
         }
     }
-
-    useEffect(() => {
-        loadTenants();
-    }, []);
 
     async function handleApprove(id: string, name: string) {
         if (!confirm(`"${name}" işletmesini onaylayıp 30 günlük deneme aboneliği başlatmak istiyor musunuz?`)) return;
@@ -79,6 +123,21 @@ export default function SuperAdminTenantsPage() {
         } finally {
             setActionLoadingId(null);
         }
+    }
+
+    // Yetkisiz erişim durumu gösterimi
+    if (!isAuthorized && !loading) {
+        return (
+            <div className="min-h-screen bg-[#f7f8f7] flex items-center justify-center p-4">
+                <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm text-center max-w-md w-full">
+                    <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto mb-4 animate-bounce" />
+                    <h2 className="text-xl font-black text-slate-900 mb-2">Erişim Yetkisi Yok</h2>
+                    <p className="text-xs text-slate-500 mb-4">
+                        Bu alana sadece Süper Yöneticiler (Admin) erişebilir. Yönlendiriliyorsunuz...
+                    </p>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -142,7 +201,6 @@ export default function SuperAdminTenantsPage() {
 
                                         return (
                                             <tr key={t.id} className="hover:bg-slate-50/70 transition">
-                                                {/* İşletme Adı & Slug */}
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-xs font-black text-emerald-400 shadow-sm">
@@ -155,12 +213,10 @@ export default function SuperAdminTenantsPage() {
                                                     </div>
                                                 </td>
 
-                                                {/* Telefon */}
                                                 <td className="px-6 py-4 text-xs font-semibold text-slate-600">
                                                     {t.phoneNumber || "Belirtilmemiş"}
                                                 </td>
 
-                                                {/* Onay Rozeti */}
                                                 <td className="px-6 py-4">
                                                     {t.isApproved ? (
                                                         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 border border-emerald-200">
@@ -173,7 +229,6 @@ export default function SuperAdminTenantsPage() {
                                                     )}
                                                 </td>
 
-                                                {/* Erişim Rozeti */}
                                                 <td className="px-6 py-4">
                                                     {t.isActive ? (
                                                         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600">
@@ -186,7 +241,6 @@ export default function SuperAdminTenantsPage() {
                                                     )}
                                                 </td>
 
-                                                {/* Abonelik Tarihi */}
                                                 <td className="px-6 py-4">
                                                     {t.subscriptionExpiresAtUtc ? (
                                                         <div>
@@ -203,10 +257,8 @@ export default function SuperAdminTenantsPage() {
                                                     )}
                                                 </td>
 
-                                                {/* Aksiyon Butonları */}
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2 flex-wrap">
-                                                        {/* Başvuru Bekliyorsa ONANLAYA Butonu */}
                                                         {!t.isApproved && (
                                                             <button
                                                                 disabled={actionLoadingId === t.id}
@@ -218,7 +270,6 @@ export default function SuperAdminTenantsPage() {
                                                             </button>
                                                         )}
 
-                                                        {/* Onaylanmışsa Dondur / Aç Butonu */}
                                                         {t.isApproved && (
                                                             <button
                                                                 disabled={actionLoadingId === t.id}
@@ -240,7 +291,6 @@ export default function SuperAdminTenantsPage() {
                                                             </button>
                                                         )}
 
-                                                        {/* Onaylanmışsa +30 Gün Ekle Butonu */}
                                                         {t.isApproved && (
                                                             <button
                                                                 disabled={actionLoadingId === t.id}

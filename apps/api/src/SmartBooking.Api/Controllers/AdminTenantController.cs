@@ -4,8 +4,14 @@ using SmartBooking.Application.Interfaces;
 
 namespace SmartBooking.Api.Controllers;
 
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace SmartBooking.Api.Controllers;
+
 [ApiController]
 [Route("api/admin/tenants")]
+[Authorize(Roles = "Admin")] // 🔒 Sadece Admin rolüne sahip JWT token'ı olanlar istek atabilir!
 public class AdminTenantController : ControllerBase
 {
     private readonly ISmartBookingDbContext _context;
