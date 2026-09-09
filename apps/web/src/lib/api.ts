@@ -7,6 +7,15 @@ const RAW_URL =
 const CLEAN_URL = RAW_URL.replace(/\/+$/, "");
 const API_BASE_URL = CLEAN_URL.endsWith("/api") ? CLEAN_URL : `${CLEAN_URL}/api`;
 
+// 🔒 Token'ı localstorage'dan güvenli bir şekilde çeken yardımcı fonksiyon
+function getAuthHeader(): HeadersInit {
+    const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+    return {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {})
+    };
+}
+
 export interface Tenant {
     id: string;
     name: string;
@@ -318,13 +327,13 @@ export async function updateTenantNotificationSettings(
     if (!res.ok) throw new Error("Ayar güncellenemedi");
 }
 
-// 8. Superadmin Tenant Yönetimi
+// 8. Superadmin Tenant Yönetimi (🔒 Bearer Token Eklendi)
 export async function fetchAdminTenants(): Promise<AdminTenantItem[]> {
     const url = `${API_BASE_URL}/admin/tenants`;
     try {
         const res = await fetch(url, {
             cache: "no-store",
-            headers: { "Content-Type": "application/json" },
+            headers: getAuthHeader(),
         });
 
         if (!res.ok) {
@@ -343,7 +352,7 @@ export async function fetchAdminTenants(): Promise<AdminTenantItem[]> {
 export async function approveTenant(id: string): Promise<{ message: string }> {
     const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}/approve`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeader(),
         body: JSON.stringify({}),
     });
 
@@ -358,7 +367,7 @@ export async function approveTenant(id: string): Promise<{ message: string }> {
 export async function toggleTenantStatus(id: string): Promise<{ message: string; isActive: boolean }> {
     const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}/toggle-status`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeader(),
         body: JSON.stringify({}),
     });
 
@@ -373,7 +382,7 @@ export async function toggleTenantStatus(id: string): Promise<{ message: string;
 export async function extendTenantSubscription(id: string, days: number): Promise<{ message: string }> {
     const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}/extend-subscription?days=${days}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeader(),
         body: JSON.stringify({}),
     });
 
