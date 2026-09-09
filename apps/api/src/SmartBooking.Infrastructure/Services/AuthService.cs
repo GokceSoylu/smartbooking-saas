@@ -38,20 +38,18 @@ public class AuthService : IAuthService
         if (slugExists)
             throw new InvalidOperationException("Bu işletme bağlantı adı (slug) zaten kullanımda.");
 
-        // 1. Yeni İşletme Oluştur (Yönetici Onayı Bekleyecek Şekilde Pasif Başlat)
         var tenant = new Tenant
         {
             Name = request.BusinessName.Trim(),
             Slug = normalizedSlug,
             PhoneNumber = request.PhoneNumber.Trim(),
-            IsApproved = false,                  // Yönetici onayı bekler
-            IsActive = true,                     // Onaylandığı an aktif olsun
-            SubscriptionExpiresAtUtc = null      // Onaylanana kadar abonelik süresi başlamaz
+            IsApproved = false,
+            IsActive = true,
+            SubscriptionExpiresAtUtc = null
         };
         _context.Tenants.Add(tenant);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // 2. Varsayılan Çalışma Saatlerini Oluştur
         var defaultHours = new List<WorkingHour>();
         for (int i = 0; i < 7; i++)
         {
@@ -67,7 +65,6 @@ public class AuthService : IAuthService
         }
         _context.WorkingHours.AddRange(defaultHours);
 
-        // 3. İşletme Sahibini (Owner) Oluştur
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
         var user = new User
         {
@@ -87,7 +84,7 @@ public class AuthService : IAuthService
             token,
             user.FullName,
             user.Email,
-            user.TenantId
+            user.TenantId ?? Guid.Empty
         );
     }
 
@@ -95,7 +92,6 @@ public class AuthService : IAuthService
     {
         var normalizedEmail = request.Email.ToLower().Trim();
 
-        // Multi-tenant filtrelerini yoksayarak kullanıcıyı bul
         var user = await _context.Users
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
@@ -105,7 +101,6 @@ public class AuthService : IAuthService
             throw new UnauthorizedAccessException("Geçersiz e-posta veya şifre.");
         }
 
-        // BCrypt doğrulaması (hatalı hash formatında uygulamanın çökmesini önler)
         bool isPasswordValid = false;
         try
         {
@@ -121,20 +116,19 @@ public class AuthService : IAuthService
             throw new UnauthorizedAccessException("Geçersiz e-posta veya şifre.");
         }
 
-        // Süper Admin / Admin kontrolü: Yönetici rollerindekiler işletme kısıtlamalarına takılmaz
+        // Admin veya SuperAdmin işletme doğrulama adımlarını atlar
         if (user.Role == "Admin" || user.Role == "SuperAdmin")
         {
             var adminToken = GenerateJwtToken(user);
-            return new AuthResponse(adminToken, user.FullName, user.Email, user.TenantId);
+            return new AuthResponse(adminToken, user.FullName, user.Email, user.TenantId ?? Guid.Empty);
         }
 
-        // Kullanıcının bağlı olduğu işletmeyi doğrula
-        if (user.TenantId != Guid.Empty)
+        if (user.TenantId.HasValue && user.TenantId.Value != Guid.Empty)
         {
             var tenant = await _context.Tenants
                 .IgnoreQueryFilters()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(t => t.Id == user.TenantId, cancellationToken);
+                .FirstOrDefaultAsync(t => t.Id == user.TenantId.Value, cancellationToken);
 
             if (tenant == null)
             {
@@ -158,7 +152,7 @@ public class AuthService : IAuthService
         }
 
         var token = GenerateJwtToken(user);
-        return new AuthResponse(token, user.FullName, user.Email, user.TenantId);
+        return new AuthResponse(token, user.FullName, user.Email, user.TenantId ?? Guid.Empty);
     }
 
     private string GenerateJwtToken(User user)
@@ -171,7 +165,7 @@ public class AuthService : IAuthService
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim("tenant_id", user.TenantId.ToString()),
+            new Claim("tenant_id", user.TenantId?.ToString() ?? string.Empty),
             new Claim(ClaimTypes.Role, user.Role),
             new Claim("name", user.FullName)
         };
