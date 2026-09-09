@@ -17,12 +17,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// 2. CORS Politikası
+// 2. CORS Politikası (Dinamik Domain Doğrulamalı)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", policy =>
     {
-        policy.SetIsOriginAllowed(origin => true)
+        policy.SetIsOriginAllowed(origin =>
+            string.IsNullOrEmpty(origin) ||
+            origin.EndsWith("randevoapp.net") ||
+            origin.StartsWith("http://localhost"))
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -75,7 +78,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 var app = builder.Build();
 
-// Global Exception Handler - Hata olsa bile CORS başlıklarını korur ve loglar
+// Global Exception Handler (Hata anında da CORS başlıklarının korunmasını garanti eder)
 app.UseExceptionHandler(exceptionHandlerApp =>
 {
     exceptionHandlerApp.Run(async context =>
@@ -91,8 +94,8 @@ app.UseExceptionHandler(exceptionHandlerApp =>
 
         await context.Response.WriteAsJsonAsync(new
         {
-            error = "Sunucu tarafında bir hata oluştu.",
-            detail = exception?.Message
+            error = exception?.Message ?? "Sunucu tarafında bir hata oluştu.",
+            detail = exception?.StackTrace
         });
     });
 });
@@ -115,7 +118,7 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// pipeline sıralaması: CORS en üstte olmalı
+// Middleware Sıralaması
 app.UseRouting();
 app.UseCors("AllowAllOrigins");
 
