@@ -13,12 +13,31 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Randevo",
-  description: "online randevu",
+  metadataBase: new URL("https://www.randevoapp.net"),
+  title: {
+    default: "Randevo | İşletmen için akıllı randevu sistemi",
+    template: "%s | Randevo",
+  },
+  description:
+    "Randevo ile kuaför ve güzellik salonunuzun online randevularını, personelini, hizmetlerini ve çalışma saatlerini tek pencereden yönetin.",
+  keywords: [
+    "randevu sistemi",
+    "online randevu",
+    "kuaför randevu sistemi",
+    "güzellik salonu randevu sistemi",
+    "online randevu sistemi",
+    "kuaför randevu programı",
+    "güzellik salonu randevu programı",
+    "Randevo",
+  ],
   icons: {
     icon: "/logo.svg", // public klasörünün içindeki dosya adı
   },
+  other: {
+    "instagram": "https://www.instagram.com/randevo.app/",
+  },
 };
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
