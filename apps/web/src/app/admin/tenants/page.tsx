@@ -10,8 +10,7 @@ import {
     RefreshCcw,
     ShieldCheck,
     Unlock,
-    UserCheck,
-    XCircle
+    AlertTriangle
 } from "lucide-react";
 import {
     AdminTenantItem,
@@ -33,7 +32,7 @@ export default function SuperAdminTenantsPage() {
             setTenants(data);
         } catch (err) {
             console.error(err);
-            alert("İşletmeler yüklenemedi.");
+            alert("İşletmeler yüklenirken bir hata oluştu.");
         } finally {
             setLoading(false);
         }
@@ -43,47 +42,47 @@ export default function SuperAdminTenantsPage() {
         loadTenants();
     }, []);
 
-    async function handleApprove(id: string) {
-        if (!confirm("Bu işletmeyi onaylayıp 30 günlük deneme aboneliği başlatmak istiyor musunuz?")) return;
+    async function handleApprove(id: string, name: string) {
+        if (!confirm(`"${name}" işletmesini onaylayıp 30 günlük deneme aboneliği başlatmak istiyor musunuz?`)) return;
         try {
             setActionLoadingId(id);
             await approveTenant(id);
             await loadTenants();
         } catch (err: any) {
-            alert(err.message);
+            alert(err.message || "Onaylama işlemi başarısız.");
         } finally {
             setActionLoadingId(null);
         }
     }
 
-    async function handleToggleStatus(id: string, currentStatus: boolean) {
+    async function handleToggleStatus(id: string, name: string, currentStatus: boolean) {
         const actionText = currentStatus ? "dondurmak (erişimini kapatmak)" : "yeniden aktif etmek";
-        if (!confirm(`Bu işletmenin sistemini ${actionText} istiyor musunuz?`)) return;
+        if (!confirm(`"${name}" işletmesinin sistemini ${actionText} istiyor musunuz?`)) return;
         try {
             setActionLoadingId(id);
             await toggleTenantStatus(id);
             await loadTenants();
         } catch (err: any) {
-            alert(err.message);
+            alert(err.message || "Durum değiştirilemedi.");
         } finally {
             setActionLoadingId(null);
         }
     }
 
-    async function handleExtend(id: string, days: number) {
+    async function handleExtend(id: string, name: string, days: number) {
         try {
             setActionLoadingId(id);
             await extendTenantSubscription(id, days);
             await loadTenants();
         } catch (err: any) {
-            alert(err.message);
+            alert(err.message || "Abonelik süresi uzatılamadı.");
         } finally {
             setActionLoadingId(null);
         }
     }
 
     return (
-        <div className="min-h-screen bg-[#f7f8f7] text-slate-900 p-6 lg:p-12">
+        <div className="min-h-screen bg-[#f7f8f7] text-slate-900 p-4 sm:p-6 lg:p-12">
             <div className="mx-auto max-w-7xl">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-6 mb-8">
@@ -92,24 +91,24 @@ export default function SuperAdminTenantsPage() {
                             <ShieldCheck className="w-4 h-4" />
                             Süper Yönetici Paneli
                         </div>
-                        <h1 className="text-3xl font-black tracking-tight text-slate-950 mt-1">
+                        <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950 mt-1">
                             İşletme Onay & Abonelik Yönetimi
                         </h1>
                         <p className="text-xs text-slate-500 mt-1">
-                            Kayıt başvurularını onayla, erişimleri sınırla veya dilediğin işletmenin aboneliğini uzat.
+                            Kayıt başvurularını onayla, erişimleri dondur veya işletmelerin abonelik süresini uzat.
                         </p>
                     </div>
                     <button
                         onClick={loadTenants}
                         disabled={loading}
-                        className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition active:scale-95 disabled:opacity-50"
                     >
                         <RefreshCcw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
                         Listeyi Yenile
                     </button>
                 </div>
 
-                {/* Tablo */}
+                {/* Tablo Konteyneri */}
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                     {loading ? (
                         <div className="p-8 space-y-4">
@@ -124,7 +123,7 @@ export default function SuperAdminTenantsPage() {
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left">
+                            <table className="w-full text-left border-collapse">
                                 <thead className="border-b border-slate-100 bg-slate-50/60 text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
                                     <tr>
                                         <th className="px-6 py-4">İşletme</th>
@@ -143,10 +142,11 @@ export default function SuperAdminTenantsPage() {
 
                                         return (
                                             <tr key={t.id} className="hover:bg-slate-50/70 transition">
+                                                {/* İşletme Adı & Slug */}
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-xs font-black text-emerald-400">
-                                                            {t.name[0]?.toUpperCase()}
+                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-xs font-black text-emerald-400 shadow-sm">
+                                                            {t.name ? t.name[0]?.toUpperCase() : "B"}
                                                         </div>
                                                         <div>
                                                             <p className="text-xs font-black text-slate-800">{t.name}</p>
@@ -155,6 +155,7 @@ export default function SuperAdminTenantsPage() {
                                                     </div>
                                                 </td>
 
+                                                {/* Telefon */}
                                                 <td className="px-6 py-4 text-xs font-semibold text-slate-600">
                                                     {t.phoneNumber || "Belirtilmemiş"}
                                                 </td>
@@ -189,11 +190,12 @@ export default function SuperAdminTenantsPage() {
                                                 <td className="px-6 py-4">
                                                     {t.subscriptionExpiresAtUtc ? (
                                                         <div>
-                                                            <p className={`text-xs font-bold ${isExpired ? "text-rose-600" : "text-slate-700"}`}>
+                                                            <p className={`text-xs font-bold flex items-center gap-1 ${isExpired ? "text-rose-600" : "text-slate-700"}`}>
+                                                                {isExpired && <AlertTriangle className="w-3 h-3 shrink-0" />}
                                                                 {new Date(t.subscriptionExpiresAtUtc).toLocaleDateString("tr-TR")}
                                                             </p>
-                                                            <p className="text-[9px] text-slate-400">
-                                                                {isExpired ? "Süresi Bitti" : "Aktif Dönem"}
+                                                            <p className={`text-[9px] font-semibold ${isExpired ? "text-rose-500" : "text-slate-400"}`}>
+                                                                {isExpired ? "Süresi Doldu" : "Aktif Abonelik"}
                                                             </p>
                                                         </div>
                                                     ) : (
@@ -203,39 +205,49 @@ export default function SuperAdminTenantsPage() {
 
                                                 {/* Aksiyon Butonları */}
                                                 <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        {/* Henüz Onaylanmadıysa Onayla Butonu */}
+                                                    <div className="flex items-center justify-end gap-2 flex-wrap">
+                                                        {/* Başvuru Bekliyorsa ONANLAYA Butonu */}
                                                         {!t.isApproved && (
                                                             <button
                                                                 disabled={actionLoadingId === t.id}
-                                                                onClick={() => handleApprove(t.id)}
-                                                                className="rounded-xl bg-emerald-500 px-3 py-2 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-600 transition disabled:opacity-50"
+                                                                onClick={() => handleApprove(t.id, t.name)}
+                                                                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-600 transition active:scale-95 disabled:opacity-50"
                                                             >
+                                                                <CheckCircle2 className="w-3 h-3" />
                                                                 Onayla (+30 Gün)
                                                             </button>
                                                         )}
 
-                                                        {/* Dondur / Aç Butonu */}
+                                                        {/* Onaylanmışsa Dondur / Aç Butonu */}
                                                         {t.isApproved && (
                                                             <button
                                                                 disabled={actionLoadingId === t.id}
-                                                                onClick={() => handleToggleStatus(t.id, t.isActive)}
-                                                                className={`rounded-xl px-3 py-2 text-[10px] font-bold transition disabled:opacity-50 ${t.isActive
-                                                                        ? "bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200"
-                                                                        : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
+                                                                onClick={() => handleToggleStatus(t.id, t.name, t.isActive)}
+                                                                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-bold transition active:scale-95 disabled:opacity-50 ${t.isActive
+                                                                    ? "bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200"
+                                                                    : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
                                                                     }`}
                                                             >
-                                                                {t.isActive ? "Erişimi Kes" : "Erişimi Aç"}
+                                                                {t.isActive ? (
+                                                                    <>
+                                                                        <Lock className="w-3 h-3" /> Erişimi Kes
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Unlock className="w-3 h-3" /> Erişimi Aç
+                                                                    </>
+                                                                )}
                                                             </button>
                                                         )}
 
-                                                        {/* +30 Gün Abonelik Ekle Butonu */}
+                                                        {/* Onaylanmışsa +30 Gün Ekle Butonu */}
                                                         {t.isApproved && (
                                                             <button
                                                                 disabled={actionLoadingId === t.id}
-                                                                onClick={() => handleExtend(t.id, 30)}
-                                                                className="rounded-xl bg-slate-950 px-3 py-2 text-[10px] font-bold text-white hover:bg-slate-800 transition disabled:opacity-50"
+                                                                onClick={() => handleExtend(t.id, t.name, 30)}
+                                                                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2 text-[10px] font-bold text-white hover:bg-slate-800 transition active:scale-95 disabled:opacity-50"
                                                             >
+                                                                <PlusCircle className="w-3 h-3" />
                                                                 +30 Gün Ekle
                                                             </button>
                                                         )}

@@ -38,20 +38,20 @@ public class AuthService : IAuthService
         if (slugExists)
             throw new InvalidOperationException("Bu işletme bağlantı adı (slug) zaten kullanımda.");
 
-        // 1. Yeni İşletme Oluştur (Doğrudan Onaylı ve 30 Günlük Deneme Süresi ile Başlat)
+        // 1. Yeni İşletme Oluştur (Yönetici Onayı Bekleyecek Şekilde Pasif Başlat)
         var tenant = new Tenant
         {
             Name = request.BusinessName.Trim(),
             Slug = normalizedSlug,
             PhoneNumber = request.PhoneNumber.Trim(),
-            IsApproved = true,                                     // Anında onaylı başlar
-            IsActive = true,                                       // Randevu alımına ve girişe açık
-            SubscriptionExpiresAtUtc = DateTime.UtcNow.AddDays(30) // 30 gün ücretsiz deneme
+            IsApproved = false,                  // Yönetici onayı bekler
+            IsActive = true,                     // Onaylandığı an aktif olsun
+            SubscriptionExpiresAtUtc = null      // Onaylanana kadar abonelik süresi başlamaz
         };
         _context.Tenants.Add(tenant);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // 2. Varsayılan Çalışma Saatlerini Oluştur (Pazar kapalı)
+        // 2. Varsayılan Çalışma Saatlerini Oluştur
         var defaultHours = new List<WorkingHour>();
         for (int i = 0; i < 7; i++)
         {
@@ -81,7 +81,6 @@ public class AuthService : IAuthService
         _context.Users.Add(user);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // 4. Kullanıcı kayıt olduğu anda paneline girebilmesi için Token üret
         var token = GenerateJwtToken(user);
 
         return new AuthResponse(
