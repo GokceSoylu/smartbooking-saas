@@ -170,7 +170,7 @@ export default function AuthPage() {
                                     <input
                                         required
                                         type="text"
-                                        placeholder="Örn: Burak Duygun Kuaför"
+                                        placeholder="Örn: Elif Beauty"
                                         value={businessName}
                                         onChange={(e) => handleBusinessNameChange(e.target.value)}
                                         className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -189,7 +189,7 @@ export default function AuthPage() {
                                     <input
                                         required
                                         type="text"
-                                        placeholder="burakduygun"
+                                        placeholder="ElifYilmaz"
                                         value={slug}
                                         onChange={(e) => setSlug(e.target.value)}
                                         className="w-full pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-r-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -204,7 +204,7 @@ export default function AuthPage() {
                                     <input
                                         required
                                         type="text"
-                                        placeholder="Örn: Burak Duygun"
+                                        placeholder="Örn: Elif Yılmaz"
                                         value={fullName}
                                         onChange={(e) => setFullName(e.target.value)}
                                         className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
