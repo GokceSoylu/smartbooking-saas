@@ -341,9 +341,20 @@ export default function HomePage() {
               randevo<span className="text-emerald-400">.</span>
             </span>
           </div>
-          <p className="text-[11px] text-slate-500">
-            Randevu yönetimini daha kolay hale getiriyoruz.
-          </p>
+
+          <div className="flex items-center gap-6">
+            <p className="text-[11px] text-slate-500">
+              Randevu yönetimini daha kolay hale getiriyoruz.
+            </p>
+            <a
+              href="https://gokcesoylu.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] font-semibold text-slate-400 transition hover:text-white"
+            >
+              Designed & Built by <span className="text-emerald-400">gokcedev</span>
+            </a>
+          </div>
         </div>
       </footer>
     </main>
