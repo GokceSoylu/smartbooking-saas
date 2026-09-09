@@ -60,17 +60,19 @@ export default function SuperAdminTenantsPage() {
         const decoded = parseJwt(token);
 
         // .NET Core ClaimTypes.Role "role" veya "http://schemas.microsoft.com/ws/2008/06/identity/claims/role" olarak gelir
-        const userRole = decoded?.role || decoded?.["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
+        // .NET Core ClaimTypes.Role "role" veya uzun URI formatında gelebilir
+        const rawRole = decoded?.role || decoded?.["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || "";
+        const userRole = String(rawRole).toLowerCase();
 
-        if (userRole !== "Admin") {
-            // Kullanıcı Admin değilse erişimi engelle
+        // Hem SuperAdmin hem de Admin rollerine izin ver
+        if (userRole !== "superadmin" && userRole !== "admin") {
+            // Kullanıcı yetkili değilse erişimi engelle
             setIsAuthorized(false);
             setTimeout(() => {
                 router.replace("/dashboard");
             }, 2000);
             return;
         }
-
         setIsAuthorized(true);
         loadTenants();
     }, [router]);
