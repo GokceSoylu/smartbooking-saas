@@ -1,13 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartBooking.Application.Interfaces;
 
 namespace SmartBooking.Api.Controllers;
-
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-
-
 
 [ApiController]
 [Route("api/admin/tenants")]
