@@ -109,7 +109,7 @@ public class AuthService : IAuthService
         if (user.Role == "Admin" || user.Role == "SuperAdmin")
         {
             var adminToken = GenerateJwtToken(user);
-            return new AuthResponse(adminToken, user.FullName, user.Email, user.TenantId);
+            return new AuthResponse(adminToken, user.FullName, user.Email, user.TenantId ?? Guid.Empty);
         }
 
         // Kullanıcının bağlı olduğu işletmeyi doğrula
@@ -142,7 +142,7 @@ public class AuthService : IAuthService
         }
 
         var token = GenerateJwtToken(user);
-        return new AuthResponse(token, user.FullName, user.Email, user.TenantId);
+        return new AuthResponse(token, user.FullName, user.Email, user.TenantId ?? Guid.Empty);
     }
 
     private string GenerateJwtToken(User user)
