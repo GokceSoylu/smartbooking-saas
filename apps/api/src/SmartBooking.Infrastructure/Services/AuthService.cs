@@ -109,16 +109,16 @@ public class AuthService : IAuthService
         if (user.Role == "Admin" || user.Role == "SuperAdmin")
         {
             var adminToken = GenerateJwtToken(user);
-            return new AuthResponse(adminToken, user.FullName, user.Email, user.TenantId ?? Guid.Empty);
+            return new AuthResponse(adminToken, user.FullName, user.Email, user.TenantId);
         }
 
-        // Kullanıcının bağlı olduğu işletmeyi doğrula
-        if (user.TenantId.HasValue && user.TenantId.Value != Guid.Empty)
+        // Kullanıcının bağlı olduğu işletmeyi doğrula (Guid.Empty kontrolü yapılıyor)
+        if (user.TenantId != Guid.Empty)
         {
             var tenant = await _context.Tenants
                 .IgnoreQueryFilters()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(t => t.Id == user.TenantId.Value, cancellationToken);
+                .FirstOrDefaultAsync(t => t.Id == user.TenantId, cancellationToken);
 
             if (tenant == null)
             {
@@ -142,7 +142,7 @@ public class AuthService : IAuthService
         }
 
         var token = GenerateJwtToken(user);
-        return new AuthResponse(token, user.FullName, user.Email, user.TenantId ?? Guid.Empty);
+        return new AuthResponse(token, user.FullName, user.Email, user.TenantId);
     }
 
     private string GenerateJwtToken(User user)
@@ -155,7 +155,7 @@ public class AuthService : IAuthService
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim("tenant_id", user.TenantId?.ToString() ?? string.Empty),
+            new Claim("tenant_id", user.TenantId.ToString()),
             new Claim(ClaimTypes.Role, user.Role),
             new Claim("name", user.FullName)
         };
