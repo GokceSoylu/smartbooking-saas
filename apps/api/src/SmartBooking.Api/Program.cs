@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -21,10 +22,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", policy =>
     {
-        policy.SetIsOriginAllowed(origin =>
-            string.IsNullOrEmpty(origin) ||
-            origin.EndsWith("randevoapp.net") ||
-            origin.StartsWith("http://localhost"))
+        policy.SetIsOriginAllowed(origin => true)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -69,7 +67,7 @@ builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
 // 7. Arka Plan Görevleri
 builder.Services.AddHostedService<AppointmentReminderWorker>();
 
-// 8. Render / Reverse Proxy Header Yapılandırması
+// 8. Reverse Proxy Header Yapılandırması
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -77,7 +75,28 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 var app = builder.Build();
 
-// Render / Production Proxy Ayarı
+// Global Exception Handler - Hata olsa bile CORS başlıklarını korur ve loglar
+app.UseExceptionHandler(exceptionHandlerApp =>
+{
+    exceptionHandlerApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+
+        var exceptionHandlerPathFeature = context.Features.Get<IExceptionHandlerPathFeature>();
+        var exception = exceptionHandlerPathFeature?.Error;
+
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(exception, "Unhandled Exception caught in pipeline.");
+
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = "Sunucu tarafında bir hata oluştu.",
+            detail = exception?.Message
+        });
+    });
+});
+
 app.UseForwardedHeaders();
 
 // Otomatik Migration
@@ -96,11 +115,10 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// Routing & CORS Sıralaması
+// pipeline sıralaması: CORS en üstte olmalı
 app.UseRouting();
 app.UseCors("AllowAllOrigins");
 
-// Tenant Middleware
 app.UseMiddleware<TenantResolutionMiddleware>();
 
 app.UseAuthentication();
