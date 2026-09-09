@@ -16,18 +16,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// 2. CORS Politikası (Net ve Sağlam Tanımlama)
+// 2. CORS Politikası
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", policy =>
     {
-        policy.WithOrigins(
-                "https://randevoapp.net",
-                "https://www.randevoapp.net",
-                "http://localhost:3000",
-                "http://localhost:3001"
-              )
-              .SetIsOriginAllowedToAllowWildcardSubdomains()
+        policy.SetIsOriginAllowed(origin =>
+            string.IsNullOrEmpty(origin) ||
+            origin.EndsWith("randevoapp.net") ||
+            origin.StartsWith("http://localhost"))
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
