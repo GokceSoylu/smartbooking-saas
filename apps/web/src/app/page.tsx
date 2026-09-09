@@ -169,8 +169,8 @@ export default function HomePage() {
                     </div>
                     <span
                       className={`hidden rounded-full px-2 py-1 text-[9px] font-bold sm:block ${status === "Bekliyor"
-                          ? "bg-amber-50 text-amber-600"
-                          : "bg-emerald-50 text-emerald-600"
+                        ? "bg-amber-50 text-amber-600"
+                        : "bg-emerald-50 text-emerald-600"
                         }`}
                     >
                       {status}
@@ -347,7 +347,7 @@ export default function HomePage() {
               Randevu yönetimini daha kolay hale getiriyoruz.
             </p>
             <a
-              href="https://gokcesoylu.vercel.app"
+              href="https://gokcedev.com"
               target="_blank"
               rel="noopener noreferrer"
               className="text-[11px] font-semibold text-slate-400 transition hover:text-white"
