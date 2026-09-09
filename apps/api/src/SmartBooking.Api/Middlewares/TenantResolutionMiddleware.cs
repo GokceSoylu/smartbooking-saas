@@ -13,10 +13,18 @@ public class TenantResolutionMiddleware
 
     public async Task InvokeAsync(HttpContext context, ICurrentTenantService currentTenantService)
     {
+        // 1. HTTP OPTIONS (CORS Preflight) isteklerini direkt geç
+        if (HttpMethods.IsOptions(context.Request.Method))
+        {
+            await _next(context);
+            return;
+        }
+
         var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 
-        // Admin, Webhook ve Swagger endpoint'leri tenant filtresine tabi tutulmaz
+        // 2. Admin, Auth, Webhook ve Swagger endpoint'leri tenant filtresine tabi tutulmaz
         if (path.StartsWith("/api/admin") ||
+            path.StartsWith("/api/auth") ||
             path.StartsWith("/api/webhook") ||
             path.StartsWith("/swagger"))
         {

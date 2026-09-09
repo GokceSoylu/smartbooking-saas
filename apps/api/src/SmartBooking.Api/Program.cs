@@ -16,12 +16,18 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// 2. CORS Politikası (Vercel ve Canlı Domainler İçin Tam İzin)
+// 2. CORS Politikası (Net ve Sağlam Tanımlama)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", policy =>
     {
-        policy.SetIsOriginAllowed(_ => true)
+        policy.WithOrigins(
+                "https://randevoapp.net",
+                "https://www.randevoapp.net",
+                "http://localhost:3000",
+                "http://localhost:3001"
+              )
+              .SetIsOriginAllowedToAllowWildcardSubdomains()
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -93,7 +99,8 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// CORS Middleware'i en başta çalışmalı
+// Routing & CORS Sıralaması
+app.UseRouting();
 app.UseCors("AllowAllOrigins");
 
 // Tenant Middleware
