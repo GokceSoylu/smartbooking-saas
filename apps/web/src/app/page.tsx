@@ -169,8 +169,8 @@ export default function HomePage() {
                     </div>
                     <span
                       className={`hidden rounded-full px-2 py-1 text-[9px] font-bold sm:block ${status === "Bekliyor"
-                        ? "bg-amber-50 text-amber-600"
-                        : "bg-emerald-50 text-emerald-600"
+                          ? "bg-amber-50 text-amber-600"
+                          : "bg-emerald-50 text-emerald-600"
                         }`}
                     >
                       {status}
@@ -342,7 +342,15 @@ export default function HomePage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-6">
+            <a
+              href="https://www.instagram.com/randevo.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] font-semibold text-slate-400 transition hover:text-white"
+            >
+              Instagram: <span className="text-emerald-400">@randevo.app</span>
+            </a>
             <p className="text-[11px] text-slate-500">
               Randevu yönetimini daha kolay hale getiriyoruz.
             </p>
