@@ -7,7 +7,7 @@ namespace SmartBooking.Api.Controllers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace SmartBooking.Api.Controllers;
+
 
 [ApiController]
 [Route("api/admin/tenants")]
