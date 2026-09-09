@@ -105,20 +105,20 @@ public class AuthService : IAuthService
             throw new UnauthorizedAccessException("Geçersiz e-posta veya şifre.");
         }
 
-        // Süper Admin kontrolü: Admin rolündekiler işletme kısıtlamalarına takılmaz
-        if (user.Role == "Admin")
+        // Süper Admin / Admin kontrolü: Yönetici rollerindekiler işletme kısıtlamalarına takılmaz
+        if (user.Role == "Admin" || user.Role == "SuperAdmin")
         {
             var adminToken = GenerateJwtToken(user);
             return new AuthResponse(adminToken, user.FullName, user.Email, user.TenantId);
         }
 
         // Kullanıcının bağlı olduğu işletmeyi doğrula
-        if (user.TenantId != Guid.Empty)
+        if (user.TenantId.HasValue && user.TenantId.Value != Guid.Empty)
         {
             var tenant = await _context.Tenants
                 .IgnoreQueryFilters()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(t => t.Id == user.TenantId, cancellationToken);
+                .FirstOrDefaultAsync(t => t.Id == user.TenantId.Value, cancellationToken);
 
             if (tenant == null)
             {
@@ -155,7 +155,7 @@ public class AuthService : IAuthService
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim("tenant_id", user.TenantId.ToString()),
+            new Claim("tenant_id", user.TenantId?.ToString() ?? string.Empty),
             new Claim(ClaimTypes.Role, user.Role),
             new Claim("name", user.FullName)
         };
