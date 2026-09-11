@@ -159,13 +159,14 @@ public class AppointmentService : IAppointmentService
             StartTimeUtc = startTimeUtc,
             EndTimeUtc = endTimeUtc,
             Price = service.Price,
-            Status = AppointmentStatus.Pending,
+            Status = AppointmentStatus.Pending, // İlk oluşturulduğunda Beklemede
             CustomerWantsWhatsAppNotification = request.CustomerWantsWhatsAppNotification
         };
 
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
+        // 1. Müşteri Beklemede (Pending) İstek Bildirimi
         if (appointment.CustomerWantsWhatsAppNotification)
         {
             await _whatsAppService.SendAppointmentRequestNotificationAsync(
@@ -230,7 +231,9 @@ public class AppointmentService : IAppointmentService
         await _context.SaveChangesAsync(cancellationToken);
 
         var tenant = await _context.Tenants.FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
-        if (tenant != null && appointment.Customer != null)
+
+        // 2. Durum Değişikliği Bildirimi (Onay / Red)
+        if (tenant != null && appointment.Customer != null && appointment.CustomerWantsWhatsAppNotification)
         {
             await _whatsAppService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
         }
