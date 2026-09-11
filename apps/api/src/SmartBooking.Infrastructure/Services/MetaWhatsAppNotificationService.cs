@@ -32,6 +32,7 @@ public class MetaWhatsAppNotificationService : INotificationService
         CancellationToken cancellationToken = default)
     {
         // 1. Müşteriye Şablon Mesajı: randevu_alindi
+        // Parametreler: {{1}} -> Müşteri Adı, {{2}} -> İşletme Adı
         if (appointment.CustomerWantsWhatsAppNotification && !string.IsNullOrWhiteSpace(customer.PhoneNumber))
         {
             await SendTemplateMessageAsync(
@@ -43,9 +44,10 @@ public class MetaWhatsAppNotificationService : INotificationService
         }
 
         // 2. İşletme Sahibine Şablon ve Butonlu İstek: randevu_onay_talep
+        // Parametreler: {{1}} Müşteri, {{2}} Personel, {{3}} Hizmet, {{4}} Tarih, {{5}} Tutar
         var ownerPhone = !string.IsNullOrWhiteSpace(tenant.PhoneNumber) ? tenant.PhoneNumber : customer.PhoneNumber;
 
-        if (tenant.NotifyOwnerOnNewAppointment || !string.IsNullOrWhiteSpace(ownerPhone))
+        if (tenant.NotifyOwnerOnNewAppointment && !string.IsNullOrWhiteSpace(ownerPhone))
         {
             var parameters = new[]
             {
@@ -82,6 +84,7 @@ public class MetaWhatsAppNotificationService : INotificationService
         if (appointment.Status == Domain.Enums.AppointmentStatus.Confirmed)
         {
             // Şablon: randevu_onaylandi
+            // Parametreler: {{1}} Müşteri Adı, {{2}} Tarih
             await SendTemplateMessageAsync(
                 customer.PhoneNumber,
                 "randevu_onaylandi",
@@ -91,7 +94,7 @@ public class MetaWhatsAppNotificationService : INotificationService
         }
         else
         {
-            // Diğer durumlar için genel metin bilgilendirmesi
+            // Red veya İptal durumlarında alternatif olarak şablon veya 24 saat içinde ise metin gönderilebilir
             string statusText = appointment.Status switch
             {
                 Domain.Enums.AppointmentStatus.Rejected => "işletme tarafından ONAYLANAMADI.",
@@ -152,7 +155,7 @@ public class MetaWhatsAppNotificationService : INotificationService
         string toPhone,
         string templateName,
         string[] parameters,
-        IEnumerable<dynamic> buttons,
+        object[] buttons,
         CancellationToken cancellationToken)
     {
         var (token, phoneId, version) = GetConfig();
@@ -161,16 +164,7 @@ public class MetaWhatsAppNotificationService : INotificationService
         var cleanPhone = FormatPhoneNumber(toPhone);
         var parameterObjects = parameters.Select(p => new { type = "text", text = p }).ToArray();
 
-        var actionButtons = buttons.Select((b, index) => new
-        {
-            type = "reply",
-            reply = new
-            {
-                id = (string)b.id,
-                title = (string)b.title
-            }
-        }).ToArray();
-
+        // Meta Cloud API butonlu şablon yapısı (Quick Reply)
         var payload = new
         {
             messaging_product = "whatsapp",
@@ -194,7 +188,7 @@ public class MetaWhatsAppNotificationService : INotificationService
                         index = "0",
                         parameters = new[]
                         {
-                            new { type = "payload", payload = ((object[])buttons)[0].GetType().GetProperty("id")?.GetValue(((object[])buttons)[0])?.ToString() }
+                            new { type = "payload", payload = ((dynamic)buttons[0]).id }
                         }
                     },
                     new
@@ -204,21 +198,14 @@ public class MetaWhatsAppNotificationService : INotificationService
                         index = "1",
                         parameters = new[]
                         {
-                            new { type = "payload", payload = ((object[])buttons)[1].GetType().GetProperty("id")?.GetValue(((object[])buttons)[1])?.ToString() }
+                            new { type = "payload", payload = ((dynamic)buttons[1]).id }
                         }
                     }
                 }
             }
         };
 
-        var isSuccess = await ExecutePostAsync(cleanPhone, payload, cancellationToken);
-
-        if (!isSuccess)
-        {
-            _logger.LogWarning("Butonlu şablon mesajı gönderilemedi, düz metin deneniyor: {Phone}", cleanPhone);
-            var fallbackText = $"Yeni randevu talebi var. Onaylamak veya reddetmek için panelinizi kullanın.";
-            await SendDirectTextMessageAsync(cleanPhone, fallbackText, cancellationToken);
-        }
+        await ExecutePostAsync(cleanPhone, payload, cancellationToken);
     }
 
     private async Task SendDirectTextMessageAsync(string toPhone, string textBody, CancellationToken cancellationToken)
@@ -255,7 +242,7 @@ public class MetaWhatsAppNotificationService : INotificationService
 
             if (response.IsSuccessStatusCode)
             {
-                _logger.LogInformation("WhatsApp İşlemi Başarılı -> {Phone}", cleanPhone);
+                _logger.LogInformation("WhatsApp Mesajı Başarıyla Gönderildi -> {Phone}", cleanPhone);
                 return true;
             }
 
@@ -264,7 +251,7 @@ public class MetaWhatsAppNotificationService : INotificationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "WhatsApp mesajı gönderilirken hata: {Phone}", cleanPhone);
+            _logger.LogError(ex, "WhatsApp mesajı gönderilirken istisna oluştu: {Phone}", cleanPhone);
             return false;
         }
     }
@@ -273,7 +260,7 @@ public class MetaWhatsAppNotificationService : INotificationService
     {
         var token = _configuration["WhatsApp:AccessToken"];
         var phoneId = _configuration["WhatsApp:PhoneNumberId"] ?? "1329477973578164";
-        var version = _configuration["WhatsApp:ApiVersion"] ?? "v22.0";
+        var version = _configuration["WhatsApp:ApiVersion"] ?? "v19.0";
         return (token, phoneId, version);
     }
 
@@ -282,7 +269,7 @@ public class MetaWhatsAppNotificationService : INotificationService
         if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
         var digits = new string(raw.Where(char.IsDigit).ToArray());
         if (digits.StartsWith("0")) digits = digits[1..];
-        if (!digits.StartsWith("90")) digits = "90" + digits;
+        if (!digits.StartsWith("90") && digits.Length == 10) digits = "90" + digits;
         return digits;
     }
 }
