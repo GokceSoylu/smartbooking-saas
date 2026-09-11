@@ -151,7 +151,6 @@ public class WhatsAppService : IWhatsAppService
 
     private async Task PostToMetaGraphAsync(string phoneId, object payload, string token, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("WhatsApp isteği atılıyor... Telefon: {Phone}", cleanPhone);
         var url = $"https://graph.facebook.com/v22.0/{phoneId}/messages";
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -159,7 +158,9 @@ public class WhatsAppService : IWhatsAppService
 
         try
         {
+            _logger.LogInformation("WhatsApp API isteği atılıyor... Endpoint: {Url}", url);
             var response = await _httpClient.SendAsync(request, cancellationToken);
+
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -172,10 +173,9 @@ public class WhatsAppService : IWhatsAppService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "WhatsApp mesajı gönderilirken hata oluştu.");
+            _logger.LogError(ex, "WhatsApp mesajı gönderilirken bir istisna oluştu.");
         }
     }
-
     private (string? Token, string? PhoneId) GetConfig()
     {
         return (_configuration["WhatsApp:AccessToken"], _configuration["WhatsApp:PhoneNumberId"]);
