@@ -23,7 +23,13 @@ public class WhatsAppService : IWhatsAppService
         _logger = logger;
     }
 
-    public async Task SendAppointmentConfirmationAsync(Appointment appointment, Customer customer, Tenant tenant, CancellationToken cancellationToken = default)
+    public async Task SendAppointmentRequestNotificationAsync(
+        Appointment appointment,
+        Tenant tenant,
+        Staff staff,
+        Service service,
+        Customer customer,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(customer.PhoneNumber)) return;
 
@@ -62,7 +68,11 @@ public class WhatsAppService : IWhatsAppService
         await PostToMetaGraphAsync(phoneId, payload, token, cancellationToken);
     }
 
-    public async Task SendStatusUpdateNotificationAsync(Appointment appointment, Customer customer, Tenant tenant, CancellationToken cancellationToken = default)
+    public async Task SendCustomerStatusUpdateAsync(
+        Appointment appointment,
+        Customer customer,
+        Tenant tenant,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(customer.PhoneNumber)) return;
 
@@ -70,7 +80,9 @@ public class WhatsAppService : IWhatsAppService
         if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phoneId)) return;
 
         var cleanPhone = FormatPhoneNumber(customer.PhoneNumber);
-        var templateName = appointment.Status == Domain.Enums.AppointmentStatus.Confirmed ? "randevu_onaylandi" : "randevu_reddedildi";
+        var templateName = appointment.Status == Domain.Enums.AppointmentStatus.Confirmed
+            ? "randevu_onaylandi"
+            : "randevu_reddedildi";
 
         var payload = new
         {
@@ -89,6 +101,45 @@ public class WhatsAppService : IWhatsAppService
                         parameters = new[]
                         {
                             new { type = "text", text = customer.FullName }
+                        }
+                    }
+                }
+            }
+        };
+
+        await PostToMetaGraphAsync(phoneId, payload, token, cancellationToken);
+    }
+
+    public async Task SendAppointmentReminderAsync(
+        Appointment appointment,
+        Customer customer,
+        Tenant tenant,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(customer.PhoneNumber)) return;
+
+        var (token, phoneId) = GetConfig();
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phoneId)) return;
+
+        var cleanPhone = FormatPhoneNumber(customer.PhoneNumber);
+        var payload = new
+        {
+            messaging_product = "whatsapp",
+            to = cleanPhone,
+            type = "template",
+            template = new
+            {
+                name = "randevu_hatirlatma",
+                language = new { code = "tr" },
+                components = new[]
+                {
+                    new
+                    {
+                        type = "body",
+                        parameters = new[]
+                        {
+                            new { type = "text", text = customer.FullName },
+                            new { type = "text", text = tenant.Name }
                         }
                     }
                 }
