@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
@@ -14,148 +13,83 @@ public class WhatsAppService : IWhatsAppService
     private readonly IConfiguration _configuration;
     private readonly ILogger<WhatsAppService> _logger;
 
-    public WhatsAppService(HttpClient httpClient, IConfiguration configuration, ILogger<WhatsAppService> logger)
+    public WhatsAppService(
+        HttpClient httpClient,
+        IConfiguration configuration,
+        ILogger<WhatsAppService> logger)
     {
         _httpClient = httpClient;
         _configuration = configuration;
         _logger = logger;
     }
 
-    public async Task SendAppointmentRequestNotificationAsync(
-        Appointment appointment,
-        Tenant tenant,
-        Staff staff,
-        Service service,
-        Customer customer,
-        CancellationToken cancellationToken = default)
+    public async Task SendAppointmentConfirmationAsync(Appointment appointment, Customer customer, Tenant tenant, CancellationToken cancellationToken = default)
     {
-        // 1. Müşteri Bildirimi (Eğer müşteri WhatsApp bildirimini kabul etmişse)
-        if (appointment.CustomerWantsWhatsAppNotification && !string.IsNullOrWhiteSpace(customer.PhoneNumber))
-        {
-            var customerMsg = $"*RandevuCep Bilgilendirme*\n\n" +
-                              $"Merhaba Sayın *{customer.FullName}*,\n" +
-                              $"*{tenant.Name}* işletmesinden randevu talebiniz başarıyla alınmıştır.\n\n" +
-                              $"🗓 *Tarih:* {appointment.StartTimeUtc:dd.MM.yyyy}\n" +
-                              $"⏰ *Saat:* {appointment.StartTimeUtc:HH:mm}\n" +
-                              $"✂️ *Hizmet:* {service.Name}\n" +
-                              $"👤 *Uzman:* {staff.FullName}\n" +
-                              $"💰 *Tutar:* {appointment.Price} ₺\n\n" +
-                              $"İşletme randevunuzu onayladığında buradan bilgilendirileceksiniz.";
+        if (string.IsNullOrWhiteSpace(customer.PhoneNumber)) return;
 
-            await SendTextMessageAsync(customer.PhoneNumber, customerMsg, cancellationToken);
+        var (token, phoneId) = GetConfig();
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phoneId))
+        {
+            _logger.LogWarning("WhatsApp yapılandırma bilgileri (Token/PhoneId) eksik.");
+            return;
         }
 
-        // 2. İşletme Sahibine Bildirim (Eğer işletme sahibi bildirim ayarını açık tutmuşsa)
-        if (tenant.NotifyOwnerOnNewAppointment && !string.IsNullOrWhiteSpace(tenant.PhoneNumber))
-        {
-            var ownerText = $"🔔 *[RandevuCep - Yeni Randevu Talebi]*\n\n" +
-                            $"Sayın *{tenant.Name}*,\n" +
-                            $"Yeni bir online randevu talebiniz var:\n\n" +
-                            $"👤 *Müşteri:* {customer.FullName} ({customer.PhoneNumber})\n" +
-                            $"🗓 *Tarih:* {appointment.StartTimeUtc:dd.MM.yyyy} - {appointment.StartTimeUtc:HH:mm}\n" +
-                            $"✂️ *Hizmet:* {service.Name}\n" +
-                            $"💈 *Personel:* {staff.FullName}\n" +
-                            $"💵 *Tutar:* {appointment.Price} ₺";
-
-            await SendInteractiveButtonsAsync(
-                tenant.PhoneNumber,
-                ownerText,
-                appointment.Id,
-                cancellationToken
-            );
-        }
-    }
-
-    public async Task SendCustomerStatusUpdateAsync(
-        Appointment appointment,
-        Customer customer,
-        Tenant tenant,
-        CancellationToken cancellationToken = default)
-    {
-        if (!appointment.CustomerWantsWhatsAppNotification || string.IsNullOrWhiteSpace(customer.PhoneNumber))
-            return;
-
-        string statusText = appointment.Status switch
-        {
-            Domain.Enums.AppointmentStatus.Confirmed => "✅ *ONAYLANDI*",
-            Domain.Enums.AppointmentStatus.Rejected => "❌ *REDDEDİLDİ*",
-            Domain.Enums.AppointmentStatus.Cancelled => "⚠️ *İPTAL EDİLDİ*",
-            _ => "DURUM GÜNCELLENDİ"
-        };
-
-        var message = $"*RandevuCep Bilgilendirme*\n\n" +
-                      $"Sayın *{customer.FullName}*,\n" +
-                      $"*{tenant.Name}* işletmesindeki randevunuzun durumu: {statusText}\n\n" +
-                      $"🗓 *Tarih:* {appointment.StartTimeUtc:dd.MM.yyyy} - {appointment.StartTimeUtc:HH:mm}\n" +
-                      (appointment.Status == Domain.Enums.AppointmentStatus.Confirmed
-                          ? "Sizi ağırlamaktan mutluluk duyacağız!"
-                          : "Detaylı bilgi için işletmeyle iletişime geçebilirsiniz.");
-
-        await SendTextMessageAsync(customer.PhoneNumber, message, cancellationToken);
-    }
-
-    public async Task SendAppointmentReminderAsync(
-        Appointment appointment,
-        Customer customer,
-        Tenant tenant,
-        CancellationToken cancellationToken = default)
-    {
-        if (!appointment.CustomerWantsWhatsAppNotification || string.IsNullOrWhiteSpace(customer.PhoneNumber))
-            return;
-
-        var message = $"⏰ *[RandevuCep Randevu Hatırlatması]*\n\n" +
-                      $"Merhaba Sayın *{customer.FullName}*,\n" +
-                      $"*{tenant.Name}* işletmesindeki randevunuza 2 saat kaldı!\n\n" +
-                      $"⏰ *Saat:* {appointment.StartTimeUtc:HH:mm}\n" +
-                      $"Görüşmek üzere!";
-
-        await SendTextMessageAsync(customer.PhoneNumber, message, cancellationToken);
-    }
-
-    private async Task SendTextMessageAsync(string to, string body, CancellationToken cancellationToken)
-    {
-        var cleanTo = FormatPhoneNumber(to);
-        _logger.LogInformation("\n================== WHATSAPP ÇIKIŞI [RandevuCep] ==================\nAlıcı: {To}\nMesaj:\n{Body}\n===================================================================", cleanTo, body);
-
-        var token = _configuration["WhatsApp:AccessToken"];
-        var phoneId = _configuration["WhatsApp:DefaultPhoneNumberId"];
-        if (string.IsNullOrWhiteSpace(token) || token.StartsWith("EAAG...")) return;
-
+        var cleanPhone = FormatPhoneNumber(customer.PhoneNumber);
         var payload = new
         {
             messaging_product = "whatsapp",
-            to = cleanTo,
-            type = "text",
-            text = new { body }
+            to = cleanPhone,
+            type = "template",
+            template = new
+            {
+                name = "randevu_alindi",
+                language = new { code = "tr" },
+                components = new[]
+                {
+                    new
+                    {
+                        type = "body",
+                        parameters = new[]
+                        {
+                            new { type = "text", text = customer.FullName },
+                            new { type = "text", text = tenant.Name }
+                        }
+                    }
+                }
+            }
         };
 
         await PostToMetaGraphAsync(phoneId, payload, token, cancellationToken);
     }
 
-    private async Task SendInteractiveButtonsAsync(string to, string body, Guid appointmentId, CancellationToken cancellationToken)
+    public async Task SendStatusUpdateNotificationAsync(Appointment appointment, Customer customer, Tenant tenant, CancellationToken cancellationToken = default)
     {
-        var cleanTo = FormatPhoneNumber(to);
-        _logger.LogInformation("\n================== WHATSAPP BUTON ÇIKIŞI [RandevuCep] ==================\nİşletme Tel: {To}\nRandevuId: {Id}\nMesaj:\n{Body}\nButonlar: [ONAYLA] [REDDET]\n=======================================================================", cleanTo, appointmentId, body);
+        if (string.IsNullOrWhiteSpace(customer.PhoneNumber)) return;
 
-        var token = _configuration["WhatsApp:AccessToken"];
-        var phoneId = _configuration["WhatsApp:DefaultPhoneNumberId"];
-        if (string.IsNullOrWhiteSpace(token) || token.StartsWith("EAAG...")) return;
+        var (token, phoneId) = GetConfig();
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phoneId)) return;
+
+        var cleanPhone = FormatPhoneNumber(customer.PhoneNumber);
+        var templateName = appointment.Status == Domain.Enums.AppointmentStatus.Confirmed ? "randevu_onaylandi" : "randevu_reddedildi";
 
         var payload = new
         {
             messaging_product = "whatsapp",
-            to = cleanTo,
-            type = "interactive",
-            interactive = new
+            to = cleanPhone,
+            type = "template",
+            template = new
             {
-                type = "button",
-                body = new { text = body },
-                action = new
+                name = templateName,
+                language = new { code = "tr" },
+                components = new[]
                 {
-                    buttons = new[]
+                    new
                     {
-                        new { type = "reply", reply = new { id = $"CONFIRM_{appointmentId}", title = "✅ Onayla" } },
-                        new { type = "reply", reply = new { id = $"REJECT_{appointmentId}", title = "❌ Reddet" } }
+                        type = "body",
+                        parameters = new[]
+                        {
+                            new { type = "text", text = customer.FullName }
+                        }
                     }
                 }
             }
@@ -166,18 +100,22 @@ public class WhatsAppService : IWhatsAppService
 
     private async Task PostToMetaGraphAsync(string phoneId, object payload, string token, CancellationToken cancellationToken)
     {
+        var url = $"https://graph.facebook.com/v22.0/{phoneId}/messages";
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
         try
         {
-            var json = JsonSerializer.Serialize(payload);
-            var request = new HttpRequestMessage(HttpMethod.Post, $"https://graph.facebook.com/v19.0/{phoneId}/messages");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-
             var response = await _httpClient.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                var err = await response.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogError("Meta Graph API Hatası: {Error}", err);
+                var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("WhatsApp API Hatası ({Status}): {Body}", response.StatusCode, errorBody);
+            }
+            else
+            {
+                _logger.LogInformation("WhatsApp mesajı başarıyla gönderildi.");
             }
         }
         catch (Exception ex)
@@ -186,10 +124,16 @@ public class WhatsAppService : IWhatsAppService
         }
     }
 
+    private (string? Token, string? PhoneId) GetConfig()
+    {
+        return (_configuration["WhatsApp:AccessToken"], _configuration["WhatsApp:PhoneNumberId"]);
+    }
+
     private string FormatPhoneNumber(string raw)
     {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
         var digits = new string(raw.Where(char.IsDigit).ToArray());
-        if (digits.StartsWith("0")) digits = "90" + digits[1..];
+        if (digits.StartsWith("0")) digits = digits[1..];
         if (!digits.StartsWith("90") && digits.Length == 10) digits = "90" + digits;
         return digits;
     }
