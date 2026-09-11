@@ -17,7 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// 2. CORS Politikası (Dinamik Domain Doğrulamalı)
+// 2. CORS Politikası
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", policy =>
@@ -26,9 +26,9 @@ builder.Services.AddCors(options =>
             string.IsNullOrEmpty(origin) ||
             origin.EndsWith("randevoapp.net") ||
             origin.StartsWith("http://localhost"))
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -64,8 +64,9 @@ builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 
 // 6. WhatsApp ve Bildirim Servisleri
-builder.Services.AddHttpClient<INotificationService, MetaWhatsAppNotificationService>();
-builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<INotificationService, MetaWhatsAppNotificationService>();
+builder.Services.AddScoped<IWhatsAppService, WhatsAppService>();
 
 // 7. Arka Plan Görevleri
 builder.Services.AddHostedService<AppointmentReminderWorker>();
@@ -78,7 +79,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 var app = builder.Build();
 
-// Global Exception Handler (Hata anında da CORS başlıklarının korunmasını garanti eder)
+// Global Exception Handler
 app.UseExceptionHandler(exceptionHandlerApp =>
 {
     exceptionHandlerApp.Run(async context =>
@@ -121,9 +122,7 @@ using (var scope = app.Services.CreateScope())
 // Middleware Sıralaması
 app.UseRouting();
 app.UseCors("AllowAllOrigins");
-
 app.UseMiddleware<TenantResolutionMiddleware>();
-
 app.UseAuthentication();
 app.UseAuthorization();
 

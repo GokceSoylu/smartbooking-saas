@@ -133,7 +133,6 @@ public class AppointmentService : IAppointmentService
         var customer = await _context.Customers
             .FirstOrDefaultAsync(c => c.PhoneNumber == trimmedPhone, cancellationToken);
 
-        // Müşteri kaydı varsa bile son girdiği isim ve notla güncelle (üyelik zorunluluğu yok)
         if (customer == null)
         {
             customer = new Customer
@@ -204,8 +203,8 @@ public class AppointmentService : IAppointmentService
             a.TenantId,
             a.Service.Name,
             a.Staff.FullName,
-            a.Customer.FullName,
-            a.Customer.PhoneNumber,
+            a.Customer != null ? a.Customer.FullName : "",
+            a.Customer != null ? a.Customer.PhoneNumber : "",
             a.StartTimeUtc,
             a.EndTimeUtc,
             a.Price,
@@ -228,7 +227,7 @@ public class AppointmentService : IAppointmentService
         await _context.SaveChangesAsync(cancellationToken);
 
         var tenant = await _context.Tenants.FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
-        if (tenant != null && (newStatus == AppointmentStatus.Confirmed || newStatus == AppointmentStatus.Rejected))
+        if (tenant != null && appointment.Customer != null)
         {
             await _notificationService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
         }
@@ -238,8 +237,8 @@ public class AppointmentService : IAppointmentService
             appointment.TenantId,
             appointment.Service.Name,
             appointment.Staff.FullName,
-            appointment.Customer.FullName,
-            appointment.Customer.PhoneNumber,
+            appointment.Customer != null ? appointment.Customer.FullName : "",
+            appointment.Customer != null ? appointment.Customer.PhoneNumber : "",
             appointment.StartTimeUtc,
             appointment.EndTimeUtc,
             appointment.Price,

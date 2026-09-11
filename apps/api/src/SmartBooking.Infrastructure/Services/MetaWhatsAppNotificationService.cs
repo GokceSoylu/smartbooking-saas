@@ -31,8 +31,9 @@ public class MetaWhatsAppNotificationService : INotificationService
         Customer customer,
         CancellationToken cancellationToken = default)
     {
+        var localStartTime = ConvertToLocalTime(appointment.StartTimeUtc);
+
         // 1. Müşteriye Şablon Mesajı: randevu_alindi
-        // Parametreler: {{1}} -> Müşteri Adı, {{2}} -> İşletme Adı
         if (appointment.CustomerWantsWhatsAppNotification && !string.IsNullOrWhiteSpace(customer.PhoneNumber))
         {
             await SendTemplateMessageAsync(
@@ -44,7 +45,6 @@ public class MetaWhatsAppNotificationService : INotificationService
         }
 
         // 2. İşletme Sahibine Şablon ve Butonlu İstek: randevu_onay_talep
-        // Parametreler: {{1}} Müşteri, {{2}} Personel, {{3}} Hizmet, {{4}} Tarih, {{5}} Tutar
         var ownerPhone = !string.IsNullOrWhiteSpace(tenant.PhoneNumber) ? tenant.PhoneNumber : customer.PhoneNumber;
 
         if (tenant.NotifyOwnerOnNewAppointment && !string.IsNullOrWhiteSpace(ownerPhone))
@@ -54,7 +54,7 @@ public class MetaWhatsAppNotificationService : INotificationService
                 customer.FullName,
                 staff.FullName,
                 service.Name,
-                appointment.StartTimeUtc.ToString("dd.MM.yyyy HH:mm"),
+                localStartTime.ToString("dd.MM.yyyy HH:mm"),
                 appointment.Price.ToString("0.00")
             };
 
@@ -81,28 +81,29 @@ public class MetaWhatsAppNotificationService : INotificationService
         if (!appointment.CustomerWantsWhatsAppNotification || string.IsNullOrWhiteSpace(customer.PhoneNumber))
             return;
 
+        var localStartTime = ConvertToLocalTime(appointment.StartTimeUtc);
+
         if (appointment.Status == Domain.Enums.AppointmentStatus.Confirmed)
         {
-            // Şablon: randevu_onaylandi
-            // Parametreler: {{1}} Müşteri Adı, {{2}} Tarih
             await SendTemplateMessageAsync(
                 customer.PhoneNumber,
                 "randevu_onaylandi",
-                new[] { customer.FullName, appointment.StartTimeUtc.ToString("dd.MM.yyyy HH:mm") },
+                new[] { customer.FullName, localStartTime.ToString("dd.MM.yyyy HH:mm") },
+                cancellationToken
+            );
+        }
+        else if (appointment.Status == Domain.Enums.AppointmentStatus.Rejected)
+        {
+            await SendTemplateMessageAsync(
+                customer.PhoneNumber,
+                "randevu_reddedildi",
+                new[] { customer.FullName, tenant.Name },
                 cancellationToken
             );
         }
         else
         {
-            // Red veya İptal durumlarında alternatif olarak şablon veya 24 saat içinde ise metin gönderilebilir
-            string statusText = appointment.Status switch
-            {
-                Domain.Enums.AppointmentStatus.Rejected => "işletme tarafından ONAYLANAMADI.",
-                Domain.Enums.AppointmentStatus.Cancelled => "İPTAL EDİLDİ.",
-                _ => "DURUMU GÜNCELLENDİ."
-            };
-
-            var message = $"*Randevu Durumu Güncellemesi*\n\nSayın *{customer.FullName}*,\n*{tenant.Name}* işletmesindeki randevunuz *{statusText}*\n\n*Tarih:* {appointment.StartTimeUtc:dd.MM.yyyy HH:mm}";
+            var message = $"*Randevu Durumu Güncellemesi*\n\nSayın *{customer.FullName}*,\n*{tenant.Name}* işletmesindeki randevunuz İPTAL EDİLDİ.\n\n*Tarih:* {localStartTime:dd.MM.yyyy HH:mm}";
             await SendDirectTextMessageAsync(customer.PhoneNumber, message, cancellationToken);
         }
     }
@@ -116,7 +117,8 @@ public class MetaWhatsAppNotificationService : INotificationService
         if (!appointment.CustomerWantsWhatsAppNotification || string.IsNullOrWhiteSpace(customer.PhoneNumber))
             return;
 
-        var message = $"*Randevu Hatırlatması*\n\nSayın *{customer.FullName}*,\n*{tenant.Name}* işletmesindeki randevunuza 2 saat kaldı! Saat: {appointment.StartTimeUtc:HH:mm}.";
+        var localStartTime = ConvertToLocalTime(appointment.StartTimeUtc);
+        var message = $"*Randevu Hatırlatması*\n\nSayın *{customer.FullName}*,\n*{tenant.Name}* işletmesindeki randevunuza 2 saat kaldı! Saat: {localStartTime:HH:mm}.";
         await SendDirectTextMessageAsync(customer.PhoneNumber, message, cancellationToken);
     }
 
@@ -155,7 +157,7 @@ public class MetaWhatsAppNotificationService : INotificationService
         string toPhone,
         string templateName,
         string[] parameters,
-        object[] buttons,
+        dynamic[] buttons,
         CancellationToken cancellationToken)
     {
         var (token, phoneId, version) = GetConfig();
@@ -164,7 +166,6 @@ public class MetaWhatsAppNotificationService : INotificationService
         var cleanPhone = FormatPhoneNumber(toPhone);
         var parameterObjects = parameters.Select(p => new { type = "text", text = p }).ToArray();
 
-        // Meta Cloud API butonlu şablon yapısı (Quick Reply)
         var payload = new
         {
             messaging_product = "whatsapp",
@@ -188,7 +189,7 @@ public class MetaWhatsAppNotificationService : INotificationService
                         index = "0",
                         parameters = new[]
                         {
-                            new { type = "payload", payload = ((dynamic)buttons[0]).id }
+                            new { type = "payload", payload = buttons[0].id }
                         }
                     },
                     new
@@ -198,7 +199,7 @@ public class MetaWhatsAppNotificationService : INotificationService
                         index = "1",
                         parameters = new[]
                         {
-                            new { type = "payload", payload = ((dynamic)buttons[1]).id }
+                            new { type = "payload", payload = buttons[1].id }
                         }
                     }
                 }
@@ -259,7 +260,7 @@ public class MetaWhatsAppNotificationService : INotificationService
     private (string? Token, string? PhoneId, string Version) GetConfig()
     {
         var token = _configuration["WhatsApp:AccessToken"];
-        var phoneId = _configuration["WhatsApp:PhoneNumberId"] ?? "1329477973578164";
+        var phoneId = _configuration["WhatsApp:PhoneNumberId"] ?? _configuration["WhatsApp:DefaultPhoneNumberId"];
         var version = _configuration["WhatsApp:ApiVersion"] ?? "v19.0";
         return (token, phoneId, version);
     }
@@ -271,5 +272,18 @@ public class MetaWhatsAppNotificationService : INotificationService
         if (digits.StartsWith("0")) digits = digits[1..];
         if (!digits.StartsWith("90") && digits.Length == 10) digits = "90" + digits;
         return digits;
+    }
+
+    private DateTime ConvertToLocalTime(DateTime utcDateTime)
+    {
+        try
+        {
+            var trZone = TimeZoneInfo.FindSystemTimeZoneById("Turkey Standard Time");
+            return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, trZone);
+        }
+        catch
+        {
+            return utcDateTime.AddHours(3); // Fallback UTC+3
+        }
     }
 }
