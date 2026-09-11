@@ -151,6 +151,7 @@ public class WhatsAppService : IWhatsAppService
 
     private async Task PostToMetaGraphAsync(string phoneId, object payload, string token, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("WhatsApp isteği atılıyor... Telefon: {Phone}", cleanPhone);
         var url = $"https://graph.facebook.com/v22.0/{phoneId}/messages";
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
