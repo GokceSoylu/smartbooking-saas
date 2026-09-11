@@ -9,14 +9,14 @@ namespace SmartBooking.Application.Services;
 public class AppointmentService : IAppointmentService
 {
     private readonly ISmartBookingDbContext _context;
-    private readonly INotificationService _notificationService;
+    private readonly IWhatsAppService _whatsAppService;
 
     public AppointmentService(
         ISmartBookingDbContext context,
-        INotificationService notificationService)
+        IWhatsAppService whatsAppService)
     {
         _context = context;
-        _notificationService = notificationService;
+        _whatsAppService = whatsAppService;
     }
 
     public async Task<List<TimeSlotDto>> GetAvailableSlotsAsync(GetAvailableSlotsRequest request, CancellationToken cancellationToken = default)
@@ -166,13 +166,16 @@ public class AppointmentService : IAppointmentService
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
-        await _notificationService.SendAppointmentRequestNotificationAsync(
-            appointment,
-            tenant,
-            staff,
-            service,
-            customer,
-            cancellationToken);
+        if (appointment.CustomerWantsWhatsAppNotification)
+        {
+            await _whatsAppService.SendAppointmentRequestNotificationAsync(
+                appointment,
+                tenant,
+                staff,
+                service,
+                customer,
+                cancellationToken);
+        }
 
         return new AppointmentResponse(
             appointment.Id,
@@ -229,7 +232,7 @@ public class AppointmentService : IAppointmentService
         var tenant = await _context.Tenants.FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
         if (tenant != null && appointment.Customer != null)
         {
-            await _notificationService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
+            await _whatsAppService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
         }
 
         return new AppointmentResponse(
