@@ -75,12 +75,12 @@ public class WhatsAppService : IWhatsAppService
     }
 
     public async Task SendBusinessNewAppointmentNotificationAsync(
-        Appointment appointment,
-        Tenant tenant,
-        Staff staff,
-        Service service,
-        Customer customer,
-        CancellationToken cancellationToken = default)
+    Appointment appointment,
+    Tenant tenant,
+    Staff staff,
+    Service service,
+    Customer customer,
+    CancellationToken cancellationToken = default)
     {
         if (tenant == null || string.IsNullOrWhiteSpace(tenant.PhoneNumber))
         {
@@ -98,6 +98,9 @@ public class WhatsAppService : IWhatsAppService
         var cleanPhone = FormatPhoneNumber(tenant.PhoneNumber);
         var startTimeStr = appointment.StartTimeUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
 
+        // "randevu_alindi" şablonuna uygun parametre düzeni:
+        // {{1}} -> İşletme Adı veya Yetkili (Alıcı)
+        // {{2}} -> Müşteri ve Hizmet Detayı
         var payload = new
         {
             messaging_product = "whatsapp",
@@ -109,23 +112,22 @@ public class WhatsAppService : IWhatsAppService
                 language = new { code = "tr" },
                 components = new[]
                 {
-                    new
+                new
+                {
+                    type = "body",
+                    parameters = new[]
                     {
-                        type = "body",
-                        parameters = new[]
-                        {
-                            new { type = "text", text = customer?.FullName ?? "Bir Müşteri" },
-                            new { type = "text", text = $"{service?.Name ?? "Hizmet"} ({startTimeStr})" }
-                        }
+                        new { type = "text", text = tenant.Name ?? "İşletme Yetkilisi" },
+                        new { type = "text", text = $"{customer?.FullName ?? "Bir Müşteri"} ({service?.Name ?? "Hizmet"} - {startTimeStr})" }
                     }
                 }
+            }
             }
         };
 
         _logger.LogInformation(">>> [WhatsAppService] İşletme sahibine yeni randevu bildirimi gönderiliyor -> İşletme Tel: {Phone}", cleanPhone);
         await PostToMetaGraphAsync(phoneId, payload, token, cancellationToken);
     }
-
     public async Task SendCustomerStatusUpdateAsync(
         Appointment appointment,
         Customer customer,
