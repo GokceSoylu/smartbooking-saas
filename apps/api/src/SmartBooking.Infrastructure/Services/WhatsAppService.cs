@@ -26,7 +26,7 @@ public class WhatsAppService : IWhatsAppService
     public async Task SendAppointmentRequestNotificationAsync(
         Appointment appointment,
         Tenant tenant,
-        StaffMember staff,
+        Staff staff,
         Service service,
         Customer customer,
         CancellationToken cancellationToken = default)
@@ -77,7 +77,7 @@ public class WhatsAppService : IWhatsAppService
     public async Task SendBusinessNewAppointmentNotificationAsync(
         Appointment appointment,
         Tenant tenant,
-        StaffMember staff,
+        Staff staff,
         Service service,
         Customer customer,
         CancellationToken cancellationToken = default)
@@ -105,7 +105,7 @@ public class WhatsAppService : IWhatsAppService
             type = "template",
             template = new
             {
-                name = "randevu_alindi", // Meta Dashboard'da onaylı varsayılan şablon (veya işletme şablon adınız)
+                name = "randevu_alindi",
                 language = new { code = "tr" },
                 components = new[]
                 {

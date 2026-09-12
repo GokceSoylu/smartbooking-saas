@@ -7,7 +7,7 @@ public interface IWhatsAppService
     Task SendAppointmentRequestNotificationAsync(
         Appointment appointment,
         Tenant tenant,
-        StaffMember staff,
+        Staff staff,
         Service service,
         Customer customer,
         CancellationToken cancellationToken = default);
@@ -15,7 +15,7 @@ public interface IWhatsAppService
     Task SendBusinessNewAppointmentNotificationAsync(
         Appointment appointment,
         Tenant tenant,
-        StaffMember staff,
+        Staff staff,
         Service service,
         Customer customer,
         CancellationToken cancellationToken = default);
