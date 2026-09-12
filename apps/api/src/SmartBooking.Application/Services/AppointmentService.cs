@@ -22,6 +22,7 @@ public class AppointmentService : IAppointmentService
     public async Task<List<TimeSlotDto>> GetAvailableSlotsAsync(GetAvailableSlotsRequest request, CancellationToken cancellationToken = default)
     {
         var service = await _context.Services
+            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
 
@@ -33,6 +34,7 @@ public class AppointmentService : IAppointmentService
         var dayOfWeek = targetDate.DayOfWeek;
 
         var workingHour = await _context.WorkingHours
+            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(w => w.DayOfWeek == dayOfWeek, cancellationToken);
 
@@ -49,6 +51,7 @@ public class AppointmentService : IAppointmentService
         var slotDuration = TimeSpan.FromMinutes(service.DurationInMinutes);
 
         var existingAppointments = await _context.Appointments
+            .IgnoreQueryFilters()
             .AsNoTracking()
             .Where(a => a.StaffId == request.StaffId &&
                         a.StartTimeUtc >= targetDate &&
@@ -84,6 +87,7 @@ public class AppointmentService : IAppointmentService
     public async Task<AppointmentResponse> CreateAppointmentAsync(CreateAppointmentRequest request, CancellationToken cancellationToken = default)
     {
         var service = await _context.Services
+            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
 
@@ -91,6 +95,7 @@ public class AppointmentService : IAppointmentService
             throw new ArgumentException("Hizmet bulunamadı.");
 
         var staff = await _context.StaffMembers
+            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == request.StaffId, cancellationToken);
 
@@ -98,7 +103,7 @@ public class AppointmentService : IAppointmentService
             throw new ArgumentException("Personel bulunamadı.");
 
         var tenant = await _context.Tenants
-            .AsNoTracking()
+            .IgnoreQueryFilters()
             .FirstOrDefaultAsync(t => t.Id == service.TenantId, cancellationToken);
 
         if (tenant == null)
@@ -109,6 +114,7 @@ public class AppointmentService : IAppointmentService
         var dayOfWeek = startTimeUtc.DayOfWeek;
 
         var workingHour = await _context.WorkingHours
+            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(w => w.DayOfWeek == dayOfWeek, cancellationToken);
 
@@ -116,6 +122,7 @@ public class AppointmentService : IAppointmentService
             throw new InvalidOperationException("İşletme seçilen tarihte hizmet vermemektedir.");
 
         bool isBusy = await _context.Appointments
+            .IgnoreQueryFilters()
             .AsNoTracking()
             .AnyAsync(a =>
                 a.StaffId == request.StaffId &&
@@ -131,7 +138,8 @@ public class AppointmentService : IAppointmentService
 
         var trimmedPhone = request.CustomerPhoneNumber.Trim();
         var customer = await _context.Customers
-            .FirstOrDefaultAsync(c => c.PhoneNumber == trimmedPhone, cancellationToken);
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.PhoneNumber == trimmedPhone && c.TenantId == service.TenantId, cancellationToken);
 
         if (customer == null)
         {
@@ -160,13 +168,13 @@ public class AppointmentService : IAppointmentService
             EndTimeUtc = endTimeUtc,
             Price = service.Price,
             Status = AppointmentStatus.Pending,
-            CustomerWantsWhatsAppNotification = request.CustomerWantsWhatsAppNotification
+            CustomerWantsWhatsAppNotification = true // Varsayılan olarak her zaman WhatsApp bildirimi gönderilsin
         };
 
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Hem müşteriye randevu alındı şablonu hem de işletmeye onay/red butonlu şablonu gönderir
+        // Bildirim Servisi: Hem Müşteriye hem İşletmeye tetikler
         await _notificationService.SendAppointmentRequestNotificationAsync(
             appointment,
             tenant,
@@ -216,6 +224,7 @@ public class AppointmentService : IAppointmentService
     public async Task<AppointmentResponse> UpdateAppointmentStatusAsync(Guid appointmentId, AppointmentStatus newStatus, CancellationToken cancellationToken = default)
     {
         var appointment = await _context.Appointments
+            .IgnoreQueryFilters()
             .Include(a => a.Service)
             .Include(a => a.Staff)
             .Include(a => a.Customer)
@@ -227,9 +236,10 @@ public class AppointmentService : IAppointmentService
         appointment.Status = newStatus;
         await _context.SaveChangesAsync(cancellationToken);
 
-        var tenant = await _context.Tenants.FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
+        var tenant = await _context.Tenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
 
-        // Durum Onaylandı veya Reddedildi olduğunda müşteriye şablon bildirim gönderir
         if (tenant != null && appointment.Customer != null)
         {
             await _notificationService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
