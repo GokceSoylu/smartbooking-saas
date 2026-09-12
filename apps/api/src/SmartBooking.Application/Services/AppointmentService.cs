@@ -168,13 +168,13 @@ public class AppointmentService : IAppointmentService
             EndTimeUtc = endTimeUtc,
             Price = service.Price,
             Status = AppointmentStatus.Pending,
-            CustomerWantsWhatsAppNotification = true // Varsayılan olarak her zaman WhatsApp bildirimi gönderilsin
+            CustomerWantsWhatsAppNotification = true // Web sitesinden frontend ne yollarsa yollasın bildirim aktif
         };
 
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Bildirim Servisi: Hem Müşteriye hem İşletmeye tetikler
+        // Hem müşteriye randevu_alindi hem işletmeye randevu_onay_talep gönderir
         await _notificationService.SendAppointmentRequestNotificationAsync(
             appointment,
             tenant,
