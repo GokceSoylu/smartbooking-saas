@@ -172,23 +172,44 @@ public class AppointmentService : IAppointmentService
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // WhatsApp Bildirimi Tetikleme
+        // 1. MÜŞTERİYE WHATSAPP BİLDİRİMİ
         if (appointment.CustomerWantsWhatsAppNotification)
         {
             try
             {
-                _logger.LogInformation(">>> [AppointmentService] WhatsApp servisine istek gönderiliyor...");
+                _logger.LogInformation(">>> [AppointmentService] Müşteriye WhatsApp bildirim isteği gönderiliyor...");
                 await _whatsAppService.SendAppointmentRequestNotificationAsync(
                     appointment, tenant, staff, service, customer, cancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ">>> [AppointmentService] WhatsApp bildirim hatası oluştu.");
+                _logger.LogError(ex, ">>> [AppointmentService] Müşteri WhatsApp bildirim hatası oluştu.");
             }
         }
         else
         {
-            _logger.LogWarning(">>> [AppointmentService] CustomerWantsWhatsAppNotification FALSE olduğu için WhatsApp tetiklenmedi!");
+            _logger.LogWarning(">>> [AppointmentService] CustomerWantsWhatsAppNotification FALSE olduğu için Müşteriye bildirim tetiklenmedi!");
+        }
+
+        // 2. İŞLETME SAHİBİNE (TENANT) WHATSAPP BİLDİRİMİ
+        if (!string.IsNullOrWhiteSpace(tenant.PhoneNumber))
+        {
+            try
+            {
+                _logger.LogInformation(">>> [AppointmentService] İşletme sahibine ({TenantPhone}) WhatsApp bildirim isteği gönderiliyor...", tenant.PhoneNumber);
+
+                // Müşteriye gönderilen bildirime ek olarak işletme sahibine bilgilendirme mesajı tetikleniyor
+                await _whatsAppService.SendBusinessNewAppointmentNotificationAsync(
+                    appointment, tenant, staff, service, customer, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, ">>> [AppointmentService] İşletme sahibi WhatsApp bildirim hatası oluştu.");
+            }
+        }
+        else
+        {
+            _logger.LogWarning(">>> [AppointmentService] İşletme sahibinin telefon numarası (Tenants.PhoneNumber) boş olduğu için WhatsApp bildirimi gönderilemedi!");
         }
 
         return new AppointmentResponse(
