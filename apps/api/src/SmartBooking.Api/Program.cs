@@ -61,15 +61,19 @@ builder.Services.AddAuthorization();
 // 5. Uygulama & Altyapı Servisleri
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
-builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 
-// 6. WhatsApp ve Bildirim Servisleri (HttpClient Typed Client ile bağlandı)
+// WhatsAppServis Kaydı (AppointmentService bu arayüzü bekliyor)
+builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
+
+// Eğer projende INotificationService de kullanılıyorsa:
 builder.Services.AddHttpClient<INotificationService, MetaWhatsAppNotificationService>();
 
-// 7. Arka Plan Görevleri
+builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+
+// 6. Arka Plan Görevleri
 builder.Services.AddHostedService<AppointmentReminderWorker>();
 
-// 8. Reverse Proxy Header Yapılandırması
+// 7. Reverse Proxy Header Yapılandırması
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -104,15 +108,16 @@ app.UseForwardedHeaders();
 // Otomatik Migration
 using (var scope = app.Services.CreateScope())
 {
-    var services = scope.ServiceProvider;
     try
     {
-        var context = services.GetRequiredService<SmartBookingDbContext>();
+        var dbContextOptions = scope.ServiceProvider.GetRequiredService<DbContextOptions<SmartBookingDbContext>>();
+        var dummyTenantService = new DummyCurrentTenantService();
+        using var context = new SmartBookingDbContext(dbContextOptions, dummyTenantService);
         context.Database.Migrate();
     }
     catch (Exception ex)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "Veritabanı migration uygulanırken hata oluştu.");
     }
 }
@@ -127,3 +132,13 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// App Startup sırasında Migration çalışırken TenantId ihtiyacını karşılayan yardımcı dummy sınıf
+public class DummyCurrentTenantService : ICurrentTenantService
+{
+    public Guid? TenantId => null;
+
+    public void SetTenant(Guid tenantId)
+    {
+    }
+}
