@@ -31,24 +31,21 @@ public class WhatsAppService : IWhatsAppService
         Customer customer,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation(">>> [WhatsAppService] SendAppointmentRequestNotificationAsync tetiklendi.");
-
         if (customer == null || string.IsNullOrWhiteSpace(customer.PhoneNumber))
         {
-            _logger.LogWarning(">>> [WhatsAppService] Müşteri veya telefon numarası boş olduğu için bildirim atlandı.");
+            _logger.LogWarning(">>> [WhatsAppService] Müşteri veya telefon numarası boş.");
             return;
         }
 
         var (token, phoneId) = GetConfig();
-        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phoneId) || token.StartsWith("YOUR_"))
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phoneId))
         {
-            _logger.LogWarning(">>> [WhatsAppService] AccessToken veya PhoneNumberId appsettings.json içinde geçerli değil.");
+            _logger.LogWarning(">>> [WhatsAppService] AccessToken veya PhoneNumberId konfigürasyonda bulunamadı.");
             return;
         }
 
         var cleanPhone = FormatPhoneNumber(customer.PhoneNumber);
 
-        // Meta Şablonu: randevu_alindi -> {{1}} = Müşteri Adı, {{2}} = İşletme Adı
         var payload = new
         {
             messaging_product = "whatsapp",
@@ -73,7 +70,7 @@ public class WhatsAppService : IWhatsAppService
             }
         };
 
-        _logger.LogInformation(">>> [WhatsAppService] Müşteriye 'randevu_alindi' bildirimi gönderiliyor. Hedef: {Phone}", cleanPhone);
+        _logger.LogInformation(">>> [WhatsAppService] 'randevu_alindi' gönderiliyor -> Hedef: {Phone}", cleanPhone);
         await PostToMetaGraphAsync(phoneId, payload, token, cancellationToken);
     }
 
@@ -83,18 +80,16 @@ public class WhatsAppService : IWhatsAppService
         Tenant tenant,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation(">>> [WhatsAppService] SendCustomerStatusUpdateAsync tetiklendi.");
-
         if (customer == null || string.IsNullOrWhiteSpace(customer.PhoneNumber))
         {
-            _logger.LogWarning(">>> [WhatsAppService] Müşteri veya telefon numarası boş olduğu için bildirim atlandı.");
+            _logger.LogWarning(">>> [WhatsAppService] Müşteri veya telefon bilgisi eksik.");
             return;
         }
 
         var (token, phoneId) = GetConfig();
-        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phoneId) || token.StartsWith("YOUR_"))
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phoneId))
         {
-            _logger.LogWarning(">>> [WhatsAppService] AccessToken veya PhoneNumberId appsettings.json içinde geçerli değil.");
+            _logger.LogWarning(">>> [WhatsAppService] AccessToken veya PhoneNumberId eksik.");
             return;
         }
 
@@ -105,7 +100,6 @@ public class WhatsAppService : IWhatsAppService
 
         var startTimeStr = appointment.StartTimeUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
 
-        // Meta Şablonu: randevu_onaylandi / randevu_reddedildi -> {{1}} = Müşteri Adı, {{2}} = Tarih/Saat
         var payload = new
         {
             messaging_product = "whatsapp",
@@ -130,7 +124,7 @@ public class WhatsAppService : IWhatsAppService
             }
         };
 
-        _logger.LogInformation(">>> [WhatsAppService] Müşteriye '{Template}' bildirimi gönderiliyor. Hedef: {Phone}", templateName, cleanPhone);
+        _logger.LogInformation(">>> [WhatsAppService] '{Template}' gönderiliyor -> Hedef: {Phone}", templateName, cleanPhone);
         await PostToMetaGraphAsync(phoneId, payload, token, cancellationToken);
     }
 
@@ -143,7 +137,7 @@ public class WhatsAppService : IWhatsAppService
         if (customer == null || string.IsNullOrWhiteSpace(customer.PhoneNumber)) return;
 
         var (token, phoneId) = GetConfig();
-        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phoneId) || token.StartsWith("YOUR_")) return;
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(phoneId)) return;
 
         var cleanPhone = FormatPhoneNumber(customer.PhoneNumber);
         var payload = new
@@ -183,19 +177,20 @@ public class WhatsAppService : IWhatsAppService
         try
         {
             var response = await _httpClient.SendAsync(request, cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
             if (!response.IsSuccessStatusCode)
             {
-                var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogError(">>> [WhatsAppService] Meta API Hatası ({Status}): {Body}", response.StatusCode, errorBody);
+                _logger.LogError(">>> [WhatsAppService] Meta API Hatası ({Status}): {Body}", response.StatusCode, responseBody);
             }
             else
             {
-                _logger.LogInformation(">>> [WhatsAppService] Mesaj başarıyla Meta tarafına iletildi.");
+                _logger.LogInformation(">>> [WhatsAppService] Meta API Başarılı Yanıt: {Body}", responseBody);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, ">>> [WhatsAppService] Meta API'ye istek atılırken istisna oluştu.");
+            _logger.LogError(ex, ">>> [WhatsAppService] Meta Graph API bağlantı hatası.");
         }
     }
 

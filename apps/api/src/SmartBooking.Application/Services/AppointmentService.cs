@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SmartBooking.Application.DTOs;
 using SmartBooking.Application.Interfaces;
 using SmartBooking.Domain.Entities;
@@ -9,20 +10,22 @@ namespace SmartBooking.Application.Services;
 public class AppointmentService : IAppointmentService
 {
     private readonly ISmartBookingDbContext _context;
-    private readonly INotificationService _notificationService;
+    private readonly IWhatsAppService _whatsAppService;
+    private readonly ILogger<AppointmentService> _logger;
 
     public AppointmentService(
         ISmartBookingDbContext context,
-        INotificationService notificationService)
+        IWhatsAppService whatsAppService,
+        ILogger<AppointmentService> logger)
     {
         _context = context;
-        _notificationService = notificationService;
+        _whatsAppService = whatsAppService;
+        _logger = logger;
     }
 
     public async Task<List<TimeSlotDto>> GetAvailableSlotsAsync(GetAvailableSlotsRequest request, CancellationToken cancellationToken = default)
     {
         var service = await _context.Services
-            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
 
@@ -34,7 +37,6 @@ public class AppointmentService : IAppointmentService
         var dayOfWeek = targetDate.DayOfWeek;
 
         var workingHour = await _context.WorkingHours
-            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(w => w.DayOfWeek == dayOfWeek, cancellationToken);
 
@@ -51,7 +53,6 @@ public class AppointmentService : IAppointmentService
         var slotDuration = TimeSpan.FromMinutes(service.DurationInMinutes);
 
         var existingAppointments = await _context.Appointments
-            .IgnoreQueryFilters()
             .AsNoTracking()
             .Where(a => a.StaffId == request.StaffId &&
                         a.StartTimeUtc >= targetDate &&
@@ -86,8 +87,9 @@ public class AppointmentService : IAppointmentService
 
     public async Task<AppointmentResponse> CreateAppointmentAsync(CreateAppointmentRequest request, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation(">>> [AppointmentService] CreateAppointmentAsync başladı. Tel: {Phone}, İstek WhatsApp: {Flag}", request.CustomerPhoneNumber, request.CustomerWantsWhatsAppNotification);
+
         var service = await _context.Services
-            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
 
@@ -95,7 +97,6 @@ public class AppointmentService : IAppointmentService
             throw new ArgumentException("Hizmet bulunamadı.");
 
         var staff = await _context.StaffMembers
-            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == request.StaffId, cancellationToken);
 
@@ -103,7 +104,7 @@ public class AppointmentService : IAppointmentService
             throw new ArgumentException("Personel bulunamadı.");
 
         var tenant = await _context.Tenants
-            .IgnoreQueryFilters()
+            .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == service.TenantId, cancellationToken);
 
         if (tenant == null)
@@ -114,7 +115,6 @@ public class AppointmentService : IAppointmentService
         var dayOfWeek = startTimeUtc.DayOfWeek;
 
         var workingHour = await _context.WorkingHours
-            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(w => w.DayOfWeek == dayOfWeek, cancellationToken);
 
@@ -122,7 +122,6 @@ public class AppointmentService : IAppointmentService
             throw new InvalidOperationException("İşletme seçilen tarihte hizmet vermemektedir.");
 
         bool isBusy = await _context.Appointments
-            .IgnoreQueryFilters()
             .AsNoTracking()
             .AnyAsync(a =>
                 a.StaffId == request.StaffId &&
@@ -138,8 +137,7 @@ public class AppointmentService : IAppointmentService
 
         var trimmedPhone = request.CustomerPhoneNumber.Trim();
         var customer = await _context.Customers
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(c => c.PhoneNumber == trimmedPhone && c.TenantId == service.TenantId, cancellationToken);
+            .FirstOrDefaultAsync(c => c.PhoneNumber == trimmedPhone, cancellationToken);
 
         if (customer == null)
         {
@@ -168,20 +166,30 @@ public class AppointmentService : IAppointmentService
             EndTimeUtc = endTimeUtc,
             Price = service.Price,
             Status = AppointmentStatus.Pending,
-            CustomerWantsWhatsAppNotification = true // Web sitesinden frontend ne yollarsa yollasın bildirim aktif
+            CustomerWantsWhatsAppNotification = request.CustomerWantsWhatsAppNotification
         };
 
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Hem müşteriye randevu_alindi hem işletmeye randevu_onay_talep gönderir
-        await _notificationService.SendAppointmentRequestNotificationAsync(
-            appointment,
-            tenant,
-            staff,
-            service,
-            customer,
-            cancellationToken);
+        // WhatsApp Bildirimi Tetikleme
+        if (appointment.CustomerWantsWhatsAppNotification)
+        {
+            try
+            {
+                _logger.LogInformation(">>> [AppointmentService] WhatsApp servisine istek gönderiliyor...");
+                await _whatsAppService.SendAppointmentRequestNotificationAsync(
+                    appointment, tenant, staff, service, customer, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, ">>> [AppointmentService] WhatsApp bildirim hatası oluştu.");
+            }
+        }
+        else
+        {
+            _logger.LogWarning(">>> [AppointmentService] CustomerWantsWhatsAppNotification FALSE olduğu için WhatsApp tetiklenmedi!");
+        }
 
         return new AppointmentResponse(
             appointment.Id,
@@ -223,8 +231,9 @@ public class AppointmentService : IAppointmentService
 
     public async Task<AppointmentResponse> UpdateAppointmentStatusAsync(Guid appointmentId, AppointmentStatus newStatus, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation(">>> [AppointmentService] UpdateAppointmentStatusAsync başladı. Id: {Id}, NewStatus: {Status}", appointmentId, newStatus);
+
         var appointment = await _context.Appointments
-            .IgnoreQueryFilters()
             .Include(a => a.Service)
             .Include(a => a.Staff)
             .Include(a => a.Customer)
@@ -236,13 +245,19 @@ public class AppointmentService : IAppointmentService
         appointment.Status = newStatus;
         await _context.SaveChangesAsync(cancellationToken);
 
-        var tenant = await _context.Tenants
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
+        var tenant = await _context.Tenants.FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
 
-        if (tenant != null && appointment.Customer != null)
+        if (tenant != null && appointment.Customer != null && appointment.CustomerWantsWhatsAppNotification)
         {
-            await _notificationService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
+            try
+            {
+                _logger.LogInformation(">>> [AppointmentService] WhatsApp durum güncelleme isteği gönderiliyor...");
+                await _whatsAppService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, ">>> [AppointmentService] WhatsApp güncelleme bildirim hatası.");
+            }
         }
 
         return new AppointmentResponse(
