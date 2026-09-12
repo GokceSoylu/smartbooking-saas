@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📅 SmartBooking SaaS Platform
 
-## Getting Started
+**SmartBooking** is a modern, multi-tenant appointment and booking management platform built with high performance, scalability, and automated customer communication in mind. It integrates directly with the Meta WhatsApp Graph API to automate appointment confirmations, status updates, and timely reminders to significantly reduce no-show rates.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Key Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Multi-Tenancy Architecture**: Secure data isolation and tenant-aware querying using Entity Framework Core.
+- **Automated WhatsApp Notifications**: Integrated with Meta Graph API (v22.0) for sending transactional SMS/WhatsApp appointment reminders and status updates (`randevu_alindi`, reminders, etc.).
+- **No-Show Engine (Background Worker)**: Scheduled background worker (`AppointmentReminderWorker`) that continuously checks upcoming appointments, triggers notifications, and marks reminders as sent using tenant-agnostic query filtering (`.IgnoreQueryFilters()`).
+- **RESTful API**: Scalable backend design following Clean Architecture patterns.
+- **Database & Migration Engine**: Robust PostgreSQL database integration with EF Core migration pipelines.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🛠️ Tech Stack
 
-## Learn More
+### **Backend**
+- **Framework**: .NET 10 Web API
+- **Database**: PostgreSQL 16 (Dockerized)
+- **ORM**: Entity Framework Core 10 (Code-First)
+- **Cache**: Redis 7
+- **Authentication & Security**: JWT Authentication, System User Token management for Meta Graph API
 
-To learn more about Next.js, take a look at the following resources:
+### **Integrations & Messaging**
+- **Meta Graph API**: WhatsApp Business Platform v22.0
+- **SMS Gateway**: Netgsm Integration
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🏗️ Project Architecture
 
-## Deploy on Vercel
+The project follows a modular, layer-separated monorepo architecture:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```text
+smartbooking-saas/
+├── apps/
+│   ├── api/
+│   │   └── src/
+│   │       ├── SmartBooking.Api/              # API Controllers & Endpoints
+│   │       ├── SmartBooking.Application/      # Business Logic & Interfaces
+│   │       ├── SmartBooking.Domain/           # Entities & Domain Models
+│   │       └── SmartBooking.Infrastructure/   # DB Context, Meta API, Background Workers
