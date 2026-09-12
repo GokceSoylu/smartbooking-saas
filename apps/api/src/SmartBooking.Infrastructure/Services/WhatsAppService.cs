@@ -98,15 +98,13 @@ public class WhatsAppService : IWhatsAppService
         var cleanPhone = FormatPhoneNumber(tenant.PhoneNumber);
         var startTimeStr = appointment.StartTimeUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm");
 
-        // Tutar bilgisi (Service veya Appointment entity'sine göre ayarlayabilirsiniz)
+        // Tutar bilgisi
         var priceStr = service?.Price.ToString("F0") ?? "0";
 
-        // Personel adı formatlaması (FullName veya FirstName/LastName fallback)
-        var staffName = staff?.FullName ?? $"{staff?.FirstName} {staff?.LastName}".Trim();
-        if (string.IsNullOrWhiteSpace(staffName))
-        {
-            staffName = "Personel";
-        }
+        // Personel adı
+        var staffName = !string.IsNullOrWhiteSpace(staff?.FullName)
+            ? staff.FullName
+            : "Personel";
 
         var payload = new
         {
@@ -115,7 +113,7 @@ public class WhatsAppService : IWhatsAppService
             type = "template",
             template = new
             {
-                name = "randevu_onay_talep", // Meta'da onaylı işletme şablonu
+                name = "randevu_onay_talep", // Meta onaylı işletme şablonu
                 language = new { code = "tr" },
                 components = new[]
                 {
