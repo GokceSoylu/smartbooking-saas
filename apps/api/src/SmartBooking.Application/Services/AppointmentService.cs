@@ -9,14 +9,14 @@ namespace SmartBooking.Application.Services;
 public class AppointmentService : IAppointmentService
 {
     private readonly ISmartBookingDbContext _context;
-    private readonly IWhatsAppService _whatsAppService;
+    private readonly INotificationService _notificationService;
 
     public AppointmentService(
         ISmartBookingDbContext context,
-        IWhatsAppService whatsAppService)
+        INotificationService notificationService)
     {
         _context = context;
-        _whatsAppService = whatsAppService;
+        _notificationService = notificationService;
     }
 
     public async Task<List<TimeSlotDto>> GetAvailableSlotsAsync(GetAvailableSlotsRequest request, CancellationToken cancellationToken = default)
@@ -159,24 +159,21 @@ public class AppointmentService : IAppointmentService
             StartTimeUtc = startTimeUtc,
             EndTimeUtc = endTimeUtc,
             Price = service.Price,
-            Status = AppointmentStatus.Pending, // İlk oluşturulduğunda Beklemede
+            Status = AppointmentStatus.Pending,
             CustomerWantsWhatsAppNotification = request.CustomerWantsWhatsAppNotification
         };
 
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // 1. Müşteri Beklemede (Pending) İstek Bildirimi
-        if (appointment.CustomerWantsWhatsAppNotification)
-        {
-            await _whatsAppService.SendAppointmentRequestNotificationAsync(
-                appointment,
-                tenant,
-                staff,
-                service,
-                customer,
-                cancellationToken);
-        }
+        // Hem müşteriye randevu alındı şablonu hem de işletmeye onay/red butonlu şablonu gönderir
+        await _notificationService.SendAppointmentRequestNotificationAsync(
+            appointment,
+            tenant,
+            staff,
+            service,
+            customer,
+            cancellationToken);
 
         return new AppointmentResponse(
             appointment.Id,
@@ -232,10 +229,10 @@ public class AppointmentService : IAppointmentService
 
         var tenant = await _context.Tenants.FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
 
-        // 2. Durum Değişikliği Bildirimi (Onay / Red)
-        if (tenant != null && appointment.Customer != null && appointment.CustomerWantsWhatsAppNotification)
+        // Durum Onaylandı veya Reddedildi olduğunda müşteriye şablon bildirim gönderir
+        if (tenant != null && appointment.Customer != null)
         {
-            await _whatsAppService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
+            await _notificationService.SendCustomerStatusUpdateAsync(appointment, appointment.Customer, tenant, cancellationToken);
         }
 
         return new AppointmentResponse(

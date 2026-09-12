@@ -63,10 +63,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 
-// 6. WhatsApp ve Bildirim Servisleri
-builder.Services.AddHttpClient();
-builder.Services.AddScoped<INotificationService, MetaWhatsAppNotificationService>();
-builder.Services.AddScoped<IWhatsAppService, WhatsAppService>();
+// 6. WhatsApp ve Bildirim Servisleri (HttpClient Typed Client ile bağlandı)
+builder.Services.AddHttpClient<INotificationService, MetaWhatsAppNotificationService>();
 
 // 7. Arka Plan Görevleri
 builder.Services.AddHostedService<AppointmentReminderWorker>();
