@@ -254,9 +254,22 @@ public class WhatsAppService : IWhatsAppService
     private string FormatPhoneNumber(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
+        // Yalnızca rakamları temizle
         var digits = new string(raw.Where(char.IsDigit).ToArray());
-        if (digits.StartsWith("0")) digits = digits[1..];
-        if (!digits.StartsWith("90") && digits.Length == 10) digits = "90" + digits;
+
+        // '05xx...' ise başındaki 0'ı kaldır (11 hane -> 10 hane)
+        if (digits.StartsWith("0") && digits.Length == 11)
+        {
+            digits = digits[1..];
+        }
+
+        // '5xx...' ise başına 90 ekle (10 hane -> 12 hane)
+        if (digits.Length == 10)
+        {
+            digits = "90" + digits;
+        }
+
         return digits;
     }
 }
