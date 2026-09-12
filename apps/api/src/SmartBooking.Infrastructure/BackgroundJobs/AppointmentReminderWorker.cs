@@ -44,41 +44,42 @@ public class AppointmentReminderWorker : BackgroundService
     {
         using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ISmartBookingDbContext>();
-        var whatsAppService = scope.ServiceProvider.GetRequiredService<IWhatsAppService>();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
         var nowUtc = DateTime.UtcNow;
         var reminderWindowEnd = nowUtc.AddHours(2);
 
-        // Arka plan işçisi tüm tenant'ları tarayacağı için tenant filtresini devre dışı bırakıyoruz
         var upcomingAppointments = await context.Appointments
-            .IgnoreQueryFilters()
+            .Include(a => a.Customer)
             .Where(a => a.Status == AppointmentStatus.Confirmed &&
                         !a.ReminderSent &&
                         a.StartTimeUtc > nowUtc &&
                         a.StartTimeUtc <= reminderWindowEnd)
             .ToListAsync(cancellationToken);
 
-        if (upcomingAppointments.Count == 0)
-            return;
-
-        _logger.LogInformation("{Count} adet yaklaşan randevu için hatırlatma mesajı gönderiliyor...", upcomingAppointments.Count);
-
         foreach (var appointment in upcomingAppointments)
         {
-            var customer = await context.Customers
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(c => c.Id == appointment.CustomerId, cancellationToken);
-
-            var tenant = await context.Tenants
-                .FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
-
-            if (customer != null && tenant != null)
+            if (appointment.Customer != null && appointment.CustomerWantsWhatsAppNotification)
             {
-                await whatsAppService.SendAppointmentReminderAsync(appointment, customer, tenant, cancellationToken);
-                appointment.ReminderSent = true;
+                var tenant = await context.Tenants
+                    .FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
+
+                if (tenant != null)
+                {
+                    await notificationService.SendAppointmentReminderAsync(
+                        appointment,
+                        appointment.Customer,
+                        tenant,
+                        cancellationToken);
+                }
             }
+
+            appointment.ReminderSent = true;
         }
 
-        await context.SaveChangesAsync(cancellationToken);
+        if (upcomingAppointments.Any())
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
     }
 }
