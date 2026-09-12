@@ -49,7 +49,9 @@ public class AppointmentReminderWorker : BackgroundService
         var nowUtc = DateTime.UtcNow;
         var reminderWindowEnd = nowUtc.AddHours(2);
 
+        // Multi-tenant filtresini arka plan servisi için bypass ediyoruz:
         var upcomingAppointments = await context.Appointments
+            .IgnoreQueryFilters()
             .Include(a => a.Customer)
             .Where(a => a.Status == AppointmentStatus.Confirmed &&
                         !a.ReminderSent &&
@@ -62,6 +64,7 @@ public class AppointmentReminderWorker : BackgroundService
             if (appointment.Customer != null && appointment.CustomerWantsWhatsAppNotification)
             {
                 var tenant = await context.Tenants
+                    .IgnoreQueryFilters()
                     .FirstOrDefaultAsync(t => t.Id == appointment.TenantId, cancellationToken);
 
                 if (tenant != null)
