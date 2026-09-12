@@ -58,7 +58,7 @@ public class WhatsAppWebhookController : ControllerBase
         using var reader = new StreamReader(Request.Body, Encoding.UTF8);
         var rawBody = await reader.ReadToEndAsync(cancellationToken);
 
-        // 1. Meta Webhook Imza Dogrulamasi (Production Guvenligi)
+        // 1. Meta Webhook İmza Doğrulaması (Production Güvenliği)
         if (!IsValidMetaSignature(rawBody))
         {
             _logger.LogWarning("Geçersiz Meta Webhook imzası saptandı.");
@@ -87,8 +87,9 @@ public class WhatsAppWebhookController : ControllerBase
                         var messageType = message.TryGetProperty("type", out var t) ? t.GetString() : null;
 
                         string? buttonId = null;
+                        string? textBody = null;
 
-                        // Quick Reply Template Buton Yaniti
+                        // Quick Reply Template Buton Yanıtı
                         if (messageType == "interactive" && message.TryGetProperty("interactive", out var interactive))
                         {
                             if (interactive.TryGetProperty("button_reply", out var btnReply) &&
@@ -97,7 +98,7 @@ public class WhatsAppWebhookController : ControllerBase
                                 buttonId = btnIdProp.GetString();
                             }
                         }
-                        // Standart Interactive Buton Yaniti
+                        // Standart Interactive Buton Yanıtı
                         else if (messageType == "button" && message.TryGetProperty("button", out var btnObj))
                         {
                             if (btnObj.TryGetProperty("payload", out var payloadProp))
@@ -105,10 +106,22 @@ public class WhatsAppWebhookController : ControllerBase
                                 buttonId = payloadProp.GetString();
                             }
                         }
+                        // Düz Metin Yanıtı (İşletme mesaja direkt yanıt yazdıysa)
+                        else if (messageType == "text" && message.TryGetProperty("text", out var textObj))
+                        {
+                            if (textObj.TryGetProperty("body", out var bodyProp))
+                            {
+                                textBody = bodyProp.GetString();
+                            }
+                        }
 
                         if (!string.IsNullOrEmpty(buttonId))
                         {
-                            await HandleButtonReplyAsync(senderPhone, buttonId, cancellationToken);
+                            await HandleButtonReplyAsync(buttonId, cancellationToken);
+                        }
+                        else if (!string.IsNullOrEmpty(textBody) && !string.IsNullOrEmpty(senderPhone))
+                        {
+                            await HandleTextReplyAsync(senderPhone, textBody, cancellationToken);
                         }
                     }
                 }
@@ -119,11 +132,11 @@ public class WhatsAppWebhookController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "WhatsApp Webhook işlenirken hata oluştu.");
-            return Ok(); // Meta'nin anlamsiz retry yapmamasi icin 200 OK dönüyoruz
+            return Ok(); // Meta'nın anlamsız retry yapmaması için 200 OK dönüyoruz
         }
     }
 
-    private async Task HandleButtonReplyAsync(string? phone, string? buttonId, CancellationToken cancellationToken)
+    private async Task HandleButtonReplyAsync(string buttonId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(buttonId)) return;
 
@@ -144,6 +157,45 @@ public class WhatsAppWebhookController : ControllerBase
         if (targetStatus.HasValue && Guid.TryParse(idString, out var appointmentId))
         {
             await UpdateStatusAndNotifyCustomerAsync(appointmentId, targetStatus.Value, cancellationToken);
+        }
+    }
+
+    private async Task HandleTextReplyAsync(string senderPhone, string textBody, CancellationToken cancellationToken)
+    {
+        var cleanSenderPhone = FormatPhoneNumber(senderPhone);
+        textBody = textBody.Trim().ToLowerInvariant();
+
+        _logger.LogInformation(">>> [Webhook] İşletmeden metin yanıtı geldi. Tel: {Phone}, Mesaj: {Text}", cleanSenderPhone, textBody);
+
+        // İşletmenin telefon numarasına ait son gelen Pending (Bekleyen) randevuyu bulalım
+        var tenant = await _context.Tenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.PhoneNumber != null && t.PhoneNumber.Contains(cleanSenderPhone), cancellationToken);
+
+        if (tenant == null) return;
+
+        var latestAppointment = await _context.Appointments
+            .IgnoreQueryFilters()
+            .Where(a => a.TenantId == tenant.Id && a.Status == AppointmentStatus.Pending)
+            .OrderByDescending(a => a.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (latestAppointment == null) return;
+
+        AppointmentStatus? targetStatus = null;
+
+        if (textBody.Contains("onay") || textBody == "1" || textBody == "evet")
+        {
+            targetStatus = AppointmentStatus.Confirmed;
+        }
+        else if (textBody.Contains("ret") || textBody.Contains("iptal") || textBody == "2" || textBody == "hayır")
+        {
+            targetStatus = AppointmentStatus.Rejected;
+        }
+
+        if (targetStatus.HasValue)
+        {
+            await UpdateStatusAndNotifyCustomerAsync(latestAppointment.Id, targetStatus.Value, cancellationToken);
         }
     }
 
@@ -194,5 +246,14 @@ public class WhatsAppWebhookController : ControllerBase
         var expectedHash = Convert.ToHexString(hash).ToLower();
 
         return string.Equals(signature, expectedHash, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string FormatPhoneNumber(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        var digits = new string(raw.Where(char.IsDigit).ToArray());
+        if (digits.StartsWith("0") && digits.Length == 11) digits = digits[1..];
+        if (digits.Length == 10) digits = "90" + digits;
+        return digits;
     }
 }
