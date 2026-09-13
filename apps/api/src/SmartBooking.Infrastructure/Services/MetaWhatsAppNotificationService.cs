@@ -118,7 +118,18 @@ public class MetaWhatsAppNotificationService : INotificationService, IWhatsAppSe
         await SendDirectTextMessageAsync(customer.PhoneNumber, message, cancellationToken);
     }
 
-    // --- IWhatsAppService (Geriye Dönük Uyumluluk) Implementasyonu ---
+    // --- IWhatsAppService Arayüzü İçin Zorunlu Metotlar ---
+
+    public async Task SendBusinessNewAppointmentNotificationAsync(
+        Appointment appointment,
+        Tenant tenant,
+        Staff staff,
+        Service service,
+        Customer customer,
+        CancellationToken cancellationToken = default)
+    {
+        await SendAppointmentRequestNotificationAsync(appointment, tenant, staff, service, customer, cancellationToken);
+    }
 
     public async Task SendAppointmentCreatedNotificationAsync(
         Appointment appointment,
@@ -140,7 +151,7 @@ public class MetaWhatsAppNotificationService : INotificationService, IWhatsAppSe
         await SendCustomerStatusUpdateAsync(appointment, customer, tenant, cancellationToken);
     }
 
-    // --- WhatsApp Cloud API Çağrıları ---
+    // --- WhatsApp Cloud API İletişim Metotları ---
 
     private async Task SendTemplateMessageAsync(string toPhone, string templateName, string[] parameters, CancellationToken cancellationToken)
     {
