@@ -62,11 +62,9 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICurrentTenantService, CurrentTenantService>();
 
-// WhatsAppServis Kaydı (AppointmentService bu arayüzü bekliyor)
-builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
-
-// Eğer projende INotificationService de kullanılıyorsa:
+// Bildirim Servisi: Hem INotificationService hem IWhatsAppService çağrılarını MetaWhatsAppNotificationService'e yönlendiriyoruz
 builder.Services.AddHttpClient<INotificationService, MetaWhatsAppNotificationService>();
+builder.Services.AddScoped<IWhatsAppService>(sp => (IWhatsAppService)sp.GetRequiredService<INotificationService>());
 
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 

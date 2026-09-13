@@ -8,7 +8,7 @@ using SmartBooking.Domain.Enums;
 
 namespace SmartBooking.Infrastructure.Services;
 
-public class MetaWhatsAppNotificationService : INotificationService
+public class MetaWhatsAppNotificationService : INotificationService, IWhatsAppService
 {
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
@@ -24,6 +24,8 @@ public class MetaWhatsAppNotificationService : INotificationService
         _logger = logger;
     }
 
+    // --- INotificationService Implementasyonu ---
+
     public async Task SendAppointmentRequestNotificationAsync(
         Appointment appointment,
         Tenant tenant,
@@ -34,7 +36,7 @@ public class MetaWhatsAppNotificationService : INotificationService
     {
         var localStartTime = ConvertToLocalTime(appointment.StartTimeUtc);
 
-        // 1. Müşteriye Şablon Mesajı: randevu_alindi (Parametreler: {{1}}=Müşteri, {{2}}=İşletme)
+        // 1. Müşteriye Şablon Mesajı: randevu_alindi ({{1}}=Müşteri, {{2}}=İşletme)
         if (appointment.CustomerWantsWhatsAppNotification && !string.IsNullOrWhiteSpace(customer?.PhoneNumber))
         {
             _logger.LogInformation(">>> Müşteriye 'randevu_alindi' şablonu gönderiliyor: {Phone}", customer.PhoneNumber);
@@ -116,12 +118,36 @@ public class MetaWhatsAppNotificationService : INotificationService
         await SendDirectTextMessageAsync(customer.PhoneNumber, message, cancellationToken);
     }
 
+    // --- IWhatsAppService (Geriye Dönük Uyumluluk) Implementasyonu ---
+
+    public async Task SendAppointmentCreatedNotificationAsync(
+        Appointment appointment,
+        Tenant tenant,
+        Staff staff,
+        Service service,
+        Customer customer,
+        CancellationToken cancellationToken = default)
+    {
+        await SendAppointmentRequestNotificationAsync(appointment, tenant, staff, service, customer, cancellationToken);
+    }
+
+    public async Task SendAppointmentStatusNotificationAsync(
+        Appointment appointment,
+        Customer customer,
+        Tenant tenant,
+        CancellationToken cancellationToken = default)
+    {
+        await SendCustomerStatusUpdateAsync(appointment, customer, tenant, cancellationToken);
+    }
+
+    // --- WhatsApp Cloud API Çağrıları ---
+
     private async Task SendTemplateMessageAsync(string toPhone, string templateName, string[] parameters, CancellationToken cancellationToken)
     {
-        var (token, phoneId, version) = GetConfig();
+        var (token, phoneId, _) = GetConfig();
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(phoneId))
         {
-            _logger.LogError(">>> WhatsApp AccessToken veya PhoneNumberId konfigürasyonda eksik!");
+            _logger.LogError(">>> WhatsApp AccessToken veya PhoneNumberId eksik!");
             return;
         }
 
@@ -158,10 +184,10 @@ public class MetaWhatsAppNotificationService : INotificationService
         dynamic[] buttons,
         CancellationToken cancellationToken)
     {
-        var (token, phoneId, version) = GetConfig();
+        var (token, phoneId, _) = GetConfig();
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(phoneId))
         {
-            _logger.LogError(">>> WhatsApp AccessToken veya PhoneNumberId konfigürasyonda eksik!");
+            _logger.LogError(">>> WhatsApp AccessToken veya PhoneNumberId eksik!");
             return;
         }
 
@@ -213,7 +239,7 @@ public class MetaWhatsAppNotificationService : INotificationService
 
     private async Task SendDirectTextMessageAsync(string toPhone, string textBody, CancellationToken cancellationToken)
     {
-        var (token, phoneId, version) = GetConfig();
+        var (token, phoneId, _) = GetConfig();
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(phoneId)) return;
 
         var cleanPhone = FormatPhoneNumber(toPhone);
