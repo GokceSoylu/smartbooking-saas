@@ -87,7 +87,14 @@ public class AppointmentService : IAppointmentService
 
     public async Task<AppointmentResponse> CreateAppointmentAsync(CreateAppointmentRequest request, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation(">>> [AppointmentService] CreateAppointmentAsync başladı. Tel: {Phone}, İstek WhatsApp: {Flag}", request.CustomerPhoneNumber, request.CustomerWantsWhatsAppNotification);
+        // 1. KVKK Aydınlatma Onayı Zorunluluğu Kontrolü
+        if (!request.KvkkApproved)
+        {
+            throw new InvalidOperationException("Randevu oluşturabilmek için KVKK Aydınlatma Metni'ni onaylamanız gerekmektedir.");
+        }
+
+        _logger.LogInformation(">>> [AppointmentService] CreateAppointmentAsync başladı. Tel: {Phone}, WhatsApp İsteği: {Flag}, Açık Rıza: {Consent}",
+            request.CustomerPhoneNumber, request.CustomerWantsWhatsAppNotification, request.ExplicitConsentWhatsAppApproved);
 
         var service = await _context.Services
             .AsNoTracking()
@@ -156,6 +163,9 @@ public class AppointmentService : IAppointmentService
             customer.Notes = request.CustomerNotes;
         }
 
+        // WhatsApp izni: Kullanıcı hem bildirim istemiş hem de KVKK yurt dışı açık rızasını vermiş olmalı
+        bool canSendWhatsApp = request.CustomerWantsWhatsAppNotification && request.ExplicitConsentWhatsAppApproved;
+
         var appointment = new Appointment
         {
             Customer = customer,
@@ -166,22 +176,29 @@ public class AppointmentService : IAppointmentService
             EndTimeUtc = endTimeUtc,
             Price = service.Price,
             Status = AppointmentStatus.Pending,
-            CustomerWantsWhatsAppNotification = request.CustomerWantsWhatsAppNotification
+            CustomerWantsWhatsAppNotification = canSendWhatsApp
         };
 
         _context.Appointments.Add(appointment);
         await _context.SaveChangesAsync(cancellationToken);
 
-        // TEK BİLDİRİM ÇAĞRISI: SendAppointmentRequestNotificationAsync hem müşteriye hem işletmeye tek seferde bildirim gönderir
-        try
+        // Tek Bildirim Çağrısı
+        if (canSendWhatsApp)
         {
-            _logger.LogInformation(">>> [AppointmentService] WhatsApp bildirim akışı başlatılıyor...");
-            await _whatsAppService.SendAppointmentRequestNotificationAsync(
-                appointment, tenant, staff, service, customer, cancellationToken);
+            try
+            {
+                _logger.LogInformation(">>> [AppointmentService] KVKK uyumlu WhatsApp bildirim akışı başlatılıyor...");
+                await _whatsAppService.SendAppointmentRequestNotificationAsync(
+                    appointment, tenant, staff, service, customer, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, ">>> [AppointmentService] WhatsApp bildirim hatası oluştu.");
+            }
         }
-        catch (Exception ex)
+        else
         {
-            _logger.LogError(ex, ">>> [AppointmentService] WhatsApp bildirim gönderiminde hata oluştu.");
+            _logger.LogInformation(">>> [AppointmentService] WhatsApp açık rızası verilmediği için müşteriye mesaj iletilmedi. Randevu oluşturuldu.");
         }
 
         return new AppointmentResponse(

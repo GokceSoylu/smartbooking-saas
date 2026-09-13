@@ -55,6 +55,8 @@ export interface CreateAppointmentPayload {
     customerPhoneNumber: string;
     customerNotes?: string;
     customerWantsWhatsAppNotification?: boolean;
+    kvkkApproved: boolean;
+    explicitConsentWhatsAppApproved: boolean;
 }
 
 export interface AppointmentResult {
@@ -327,7 +329,7 @@ export async function updateTenantNotificationSettings(
     if (!res.ok) throw new Error("Ayar güncellenemedi");
 }
 
-// 8. Superadmin Tenant Yönetimi (🔒 Bearer Token Eklendi)
+// 8. Superadmin Tenant Yönetimi
 export async function fetchAdminTenants(): Promise<AdminTenantItem[]> {
     const url = `${API_BASE_URL}/admin/tenants`;
     try {

@@ -21,7 +21,9 @@ public record CreateAppointmentRequest(
     string CustomerFullName,
     string CustomerPhoneNumber,
     string? CustomerNotes,
-    bool CustomerWantsWhatsAppNotification = true
+    bool CustomerWantsWhatsAppNotification = true,
+    bool KvkkApproved = false,
+    bool ExplicitConsentWhatsAppApproved = false
 );
 
 public record AppointmentResponse(
