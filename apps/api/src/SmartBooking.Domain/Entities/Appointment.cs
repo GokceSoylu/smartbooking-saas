@@ -23,4 +23,7 @@ public class Appointment : BaseEntity, ITenantEntity
     public bool ReminderSent { get; set; } = false;
     public decimal Price { get; set; }
     public string? CancellationReason { get; set; }
+    public DateTime? KvkkApprovedAtUtc { get; set; }
+    public string? KvkkApprovalIpAddress { get; set; }
+    public string? KvkkConsentTextVersion { get; set; }
 }

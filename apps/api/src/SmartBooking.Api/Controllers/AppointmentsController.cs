@@ -31,8 +31,18 @@ public class AppointmentsController : ControllerBase
     {
         try
         {
-            _logger.LogInformation(">>> [Randevu Talebi Geldi] Telefon: {Phone}, Başlangıç: {Start}", request.CustomerPhoneNumber, request.StartTimeUtc);
-            var result = await _appointmentService.CreateAppointmentAsync(request, cancellationToken);
+            // Cloudflare veya reverse proxy arkasındaki gerçek istemci IP adresini yakalama
+            var clientIp = HttpContext.Request.Headers["CF-Connecting-IP"].FirstOrDefault()
+                           ?? HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                           ?? HttpContext.Connection.RemoteIpAddress?.ToString();
+
+            // Gelen isteği yakalanan IP ile zenginleştirme (ispat yükümlülüğü logu)
+            var finalRequest = request with { ClientIpAddress = clientIp };
+
+            _logger.LogInformation(">>> [Randevu Talebi Geldi] Telefon: {Phone}, Başlangıç: {Start}, IP: {Ip}",
+                finalRequest.CustomerPhoneNumber, finalRequest.StartTimeUtc, clientIp);
+
+            var result = await _appointmentService.CreateAppointmentAsync(finalRequest, cancellationToken);
             return Ok(result);
         }
         catch (Exception ex)

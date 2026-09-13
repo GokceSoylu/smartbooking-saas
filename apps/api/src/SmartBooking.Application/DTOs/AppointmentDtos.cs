@@ -23,7 +23,9 @@ public record CreateAppointmentRequest(
     string? CustomerNotes,
     bool CustomerWantsWhatsAppNotification = true,
     bool KvkkApproved = false,
-    bool ExplicitConsentWhatsAppApproved = false
+    bool ExplicitConsentWhatsAppApproved = false,
+    string? ClientIpAddress = null,
+    string? ConsentVersion = "v1.0"
 );
 
 public record AppointmentResponse(
