@@ -24,7 +24,7 @@ public class MetaWhatsAppNotificationService : INotificationService, IWhatsAppSe
         _logger = logger;
     }
 
-    // --- INotificationService Implementasyonu ---
+    // --- INotificationService & IWhatsAppService Ortak Ana Metotları ---
 
     public async Task SendAppointmentRequestNotificationAsync(
         Appointment appointment,
@@ -118,7 +118,7 @@ public class MetaWhatsAppNotificationService : INotificationService, IWhatsAppSe
         await SendDirectTextMessageAsync(customer.PhoneNumber, message, cancellationToken);
     }
 
-    // --- IWhatsAppService Arayüzü İçin Zorunlu Metotlar ---
+    // --- IWhatsAppService Eski Arayüz İmzaları ---
 
     public async Task SendBusinessNewAppointmentNotificationAsync(
         Appointment appointment,
@@ -151,7 +151,7 @@ public class MetaWhatsAppNotificationService : INotificationService, IWhatsAppSe
         await SendCustomerStatusUpdateAsync(appointment, customer, tenant, cancellationToken);
     }
 
-    // --- WhatsApp Cloud API İletişim Metotları ---
+    // --- Meta Graph API İletişim Metotları ---
 
     private async Task SendTemplateMessageAsync(string toPhone, string templateName, string[] parameters, CancellationToken cancellationToken)
     {
